@@ -50,5 +50,6 @@ supabase/.temp
 !.vscode/extensions.json
 .idea
 
-# local tooling
-.claude
+# Claude Code — personal/local overrides only; .claude/settings.json (shared
+# project config) and .claude/launch.json (dev server config) ARE committed.
+.claude/settings.local.json
