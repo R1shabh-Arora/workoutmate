@@ -105,6 +105,8 @@ After any deploy, actually check the live URL — don't assume:
 - [ ] Ask the AI coach an actionable question, confirm a proposal card appears, confirm nothing changes in the database until you click Apply, confirm it does change after
 - [ ] Ask the AI coach to switch to the body-part split by name; confirm it calls `change_split` (not just replying in text), the card shows a pending proposal, and the model's own text never claims the change already happened
 - [ ] Reload `/coach` after an Apply and after a Cancel; confirm the card shows the real persisted state (Applied / Cancelled), not the Apply/Cancel buttons again
+- [ ] `/exercises` loads, search returns relevant results, and a filter (muscle/equipment/difficulty/category/movement) narrows the list — the library is ~930 rows now, so also confirm the page isn't loading them all at once (Network tab: each request should be paginated, not one huge payload)
+- [ ] If a pending plan change exists, confirm the nav shows the "N pending plan changes" indicator (sidebar on desktop, a badge on the Coach icon on mobile) and it disappears after Apply/Cancel
 
 ## Rollback considerations
 

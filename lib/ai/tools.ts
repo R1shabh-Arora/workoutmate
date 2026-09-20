@@ -13,7 +13,8 @@ import { proposeChange } from "./pending-change";
 import { generatePlan } from "@/lib/generation/engine";
 import { SPLIT_TYPES, SPLIT_LABELS, type FitnessGoal, type SplitType, type WorkoutDuration } from "@/lib/types/enums";
 import { getDayOfWeekInTimezone } from "@/lib/date-tz";
-import type { GenerationInput } from "@/lib/generation/types";
+import type { GenerationInput, PoolExercise } from "@/lib/generation/types";
+import { GENERATION_POOL_COLUMNS } from "@/lib/generation/pool-columns";
 
 type DbClient = SupabaseClient<Database>;
 
@@ -265,7 +266,10 @@ export function buildCoachTools(supabase: DbClient, profileId: string, conversat
         }
 
         const { data: prefs } = await supabase.from("training_preferences").select("equipment").eq("profile_id", profileId).maybeSingle();
-        const candidates = await getSubstitutesForExercise(exercise.id, { equipment: (prefs?.equipment as string[]) ?? [] });
+        const candidates = await getSubstitutesForExercise(exercise.id, {
+          equipment: (prefs?.equipment as string[]) ?? [],
+          searchHint: preferredAlternativeName,
+        });
         if (candidates.length === 0) {
           return { proposed: false, reason: "No suitable substitute found with the user's current equipment." };
         }
@@ -406,8 +410,8 @@ export function buildCoachTools(supabase: DbClient, profileId: string, conversat
           avoidExercises: limitations?.avoid_exercises ?? [],
         };
 
-        const { data: exercisePool } = await supabase.from("exercises").select("*").eq("is_active", true);
-        const newPlan = generatePlan(input, exercisePool ?? []);
+        const { data: exercisePool } = await supabase.from("exercises").select(GENERATION_POOL_COLUMNS).eq("is_active", true);
+        const newPlan = generatePlan(input, (exercisePool ?? []) as PoolExercise[]);
 
         const change = await proposeChange(
           supabase,
@@ -452,8 +456,8 @@ export function buildCoachTools(supabase: DbClient, profileId: string, conversat
           avoidExercises: limitations?.avoid_exercises ?? [],
         };
 
-        const { data: exercisePool } = await supabase.from("exercises").select("*").eq("is_active", true);
-        const newPlan = generatePlan(input, exercisePool ?? []);
+        const { data: exercisePool } = await supabase.from("exercises").select(GENERATION_POOL_COLUMNS).eq("is_active", true);
+        const newPlan = generatePlan(input, (exercisePool ?? []) as PoolExercise[]);
 
         const change = await proposeChange(
           supabase,
@@ -503,8 +507,8 @@ export function buildCoachTools(supabase: DbClient, profileId: string, conversat
           avoidExercises: limitations?.avoid_exercises ?? [],
         };
 
-        const { data: exercisePool } = await supabase.from("exercises").select("*").eq("is_active", true);
-        const newPlan = generatePlan(input, exercisePool ?? []);
+        const { data: exercisePool } = await supabase.from("exercises").select(GENERATION_POOL_COLUMNS).eq("is_active", true);
+        const newPlan = generatePlan(input, (exercisePool ?? []) as PoolExercise[]);
 
         const change = await proposeChange(
           supabase,

@@ -16,9 +16,26 @@ export interface DayTemplate {
   slots: ExerciseSlot[];
 }
 
+/**
+ * The columns generatePlan()/selectExercise() actually read from a pool row —
+ * not the full exercises row (description, instructions, common_mistakes,
+ * license metadata, etc. are display-only, never consulted by generation
+ * logic). Every call site building a pool for generation selects exactly
+ * this column list (GENERATION_POOL_COLUMNS, lib/generation/pool-columns.ts)
+ * instead of "*", since the exercise-editing AI tools run in the same
+ * CPU-constrained Cloudflare Worker request that once caused a real 1102
+ * (see docs/ARCHITECTURE.md) — and the pool got ~10x bigger with the
+ * expanded exercise library, so the columns actually fetched matter more
+ * than they used to.
+ */
+export type PoolExercise = Pick<
+  Tables<"exercises">,
+  "id" | "name" | "slug" | "category" | "primary_muscle" | "secondary_muscles" | "equipment" | "difficulty" | "movement_type" | "is_unilateral"
+>;
+
 /** A fully-resolved exercise placed into a day, ready to persist as a workout_exercises row. */
 export interface GeneratedExercise {
-  exercise: Tables<"exercises">;
+  exercise: PoolExercise;
   orderIndex: number;
   isWarmup: boolean;
   sets: number;

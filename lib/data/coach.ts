@@ -43,6 +43,22 @@ export async function getConversation(id: string): Promise<Tables<"coach_convers
   return data;
 }
 
+/**
+ * Count of the user's still-actionable proposals, for the persistent nav
+ * indicator (so a proposal isn't only discoverable by scrolling back through
+ * a long conversation to find its inline card). Same authoritative source
+ * (pending_plan_changes.status) as the confirmation card itself.
+ */
+export async function getPendingChangeCount(): Promise<number> {
+  const { supabase, user } = await requireUser();
+  const { count } = await supabase
+    .from("pending_plan_changes")
+    .select("id", { count: "exact", head: true })
+    .eq("profile_id", user.id)
+    .eq("status", "pending");
+  return count ?? 0;
+}
+
 /** Converts stored coach_messages rows back into the UIMessage shape useChat expects for initial history. */
 export async function getConversationUIMessages(conversationId: string): Promise<UIMessage[]> {
   const { supabase, user } = await requireUser();

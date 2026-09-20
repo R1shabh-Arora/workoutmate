@@ -15,11 +15,13 @@ export function Sidebar({
   avatarUrl,
   notifications,
   unreadCount,
+  pendingChangeCount,
 }: {
   firstName: string;
   avatarUrl: string | null;
   notifications: Tables<"notifications">[];
   unreadCount: number;
+  pendingChangeCount: number;
 }) {
   const pathname = usePathname();
 
@@ -35,6 +37,7 @@ export function Sidebar({
       <nav className="flex-1 space-y-0.5 px-3">
         {SIDEBAR_NAV_ITEMS.map((item) => {
           const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+          const showPendingBadge = item.href === "/coach" && pendingChangeCount > 0;
           return (
             <Link
               key={item.href}
@@ -45,10 +48,24 @@ export function Sidebar({
               )}
             >
               <item.icon className="size-[18px]" />
-              {item.label}
+              <span className="flex-1">{item.label}</span>
+              {showPendingBadge && (
+                <span className="flex size-5 items-center justify-center rounded-full bg-primary text-[0.6875rem] font-semibold text-primary-foreground">
+                  {pendingChangeCount > 9 ? "9+" : pendingChangeCount}
+                </span>
+              )}
             </Link>
           );
         })}
+        {pendingChangeCount > 0 && (
+          <Link
+            href="/coach"
+            className="mt-1 flex items-center gap-2 rounded-lg border border-primary/25 bg-primary/[0.04] px-3 py-2 text-xs font-medium text-primary"
+          >
+            <span className="size-1.5 shrink-0 rounded-full bg-primary" />
+            {pendingChangeCount} pending plan change{pendingChangeCount === 1 ? "" : "s"} · Review
+          </Link>
+        )}
       </nav>
 
       <div className="flex items-center justify-between gap-2 border-t border-border p-3">

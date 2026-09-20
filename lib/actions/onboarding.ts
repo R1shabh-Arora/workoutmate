@@ -4,7 +4,8 @@ import { requireUser } from "@/lib/data/profile";
 import { onboardingSchema, type OnboardingData } from "@/lib/validations/onboarding";
 import { generatePlan } from "@/lib/generation/engine";
 import { persistPlan } from "@/lib/generation/persist";
-import type { GenerationInput } from "@/lib/generation/types";
+import type { GenerationInput, PoolExercise } from "@/lib/generation/types";
+import { GENERATION_POOL_COLUMNS } from "@/lib/generation/pool-columns";
 
 export async function completeOnboarding(rawData: OnboardingData) {
   const parsed = onboardingSchema.safeParse(rawData);
@@ -76,10 +77,11 @@ export async function completeOnboarding(rawData: OnboardingData) {
     throw new Error("We couldn't save your limitations. Please try again.");
   }
 
-  const { data: exercisePool, error: exercisesError } = await supabase
+  const { data: exercisePoolRaw, error: exercisesError } = await supabase
     .from("exercises")
-    .select("*")
+    .select(GENERATION_POOL_COLUMNS)
     .eq("is_active", true);
+  const exercisePool = exercisePoolRaw as PoolExercise[] | null;
 
   if (exercisesError || !exercisePool || exercisePool.length === 0) {
     console.error("[completeOnboarding] exercise pool fetch failed:", exercisesError?.message);

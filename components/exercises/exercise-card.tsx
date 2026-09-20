@@ -5,7 +5,7 @@ import { ChevronDown, Dumbbell } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { MUSCLE_GROUP_LABELS, EQUIPMENT_LABELS } from "@/lib/types/enums";
+import { MUSCLE_GROUP_LABELS, EQUIPMENT_LABELS, FORCE_LABELS, type ForceType } from "@/lib/types/enums";
 import type { Tables } from "@/lib/types/database.types";
 
 const DIFFICULTY_VARIANT: Record<string, "outline" | "success" | "warning" | "destructive"> = {
@@ -32,6 +32,11 @@ export function ExerciseCard({ exercise }: { exercise: Tables<"exercises"> }) {
             <Badge variant={DIFFICULTY_VARIANT[exercise.difficulty]} className="text-[0.6875rem] capitalize">
               {exercise.difficulty}
             </Badge>
+            {exercise.force && (
+              <Badge variant="secondary" className="text-[0.6875rem]">
+                {FORCE_LABELS[exercise.force as ForceType]}
+              </Badge>
+            )}
           </div>
         </div>
         <ChevronDown className={cn("size-4 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")} />
@@ -82,6 +87,20 @@ export function ExerciseCard({ exercise }: { exercise: Tables<"exercises"> }) {
                 ))}
               </ul>
             </div>
+          )}
+
+          {exercise.attribution && (
+            <p className="text-[0.6875rem] text-muted-foreground/70">
+              {exercise.attribution}
+              {exercise.license_url && (
+                <>
+                  {" "}
+                  <a href={exercise.license_url} target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">
+                    License
+                  </a>
+                </>
+              )}
+            </p>
           )}
         </div>
       )}

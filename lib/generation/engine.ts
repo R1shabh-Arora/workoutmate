@@ -1,6 +1,5 @@
-import type { Tables } from "@/lib/types/database.types";
 import { DURATION_MINUTES, GOAL_LABELS, type FitnessGoal } from "@/lib/types/enums";
-import type { GenerationInput, GeneratedDay, GeneratedExercise, GeneratedPlan } from "./types";
+import type { GenerationInput, GeneratedDay, GeneratedExercise, GeneratedPlan, PoolExercise } from "./types";
 import { resolveDayTemplates, CARDIO_CORE } from "./split-templates";
 import { resolveTrainingDays } from "./schedule";
 import { buildPrescription, estimateSetSeconds } from "./prescription";
@@ -22,7 +21,7 @@ function estimateExerciseSeconds(ex: GeneratedExercise): number {
  * rules — split selection, exercise-library filtering, and goal/experience
  * based prescriptions. No AI model is involved in generating the numbers.
  */
-export function generatePlan(input: GenerationInput, exercisePool: Tables<"exercises">[]): GeneratedPlan {
+export function generatePlan(input: GenerationInput, exercisePool: PoolExercise[]): GeneratedPlan {
   const dayTemplates = resolveDayTemplates(input.splitType, input.daysPerWeek);
   const trainingDayNumbers = resolveTrainingDays(input.daysPerWeek, input.preferredDays);
   const targetMinutes = DURATION_MINUTES[input.workoutDuration];

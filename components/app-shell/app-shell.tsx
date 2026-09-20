@@ -10,17 +10,25 @@ export function AppShell({
   avatarUrl,
   notifications,
   unreadCount,
+  pendingChangeCount,
   children,
 }: {
   firstName: string;
   avatarUrl: string | null;
   notifications: Tables<"notifications">[];
   unreadCount: number;
+  pendingChangeCount: number;
   children: React.ReactNode;
 }) {
   return (
     <div className="min-h-svh">
-      <Sidebar firstName={firstName} avatarUrl={avatarUrl} notifications={notifications} unreadCount={unreadCount} />
+      <Sidebar
+        firstName={firstName}
+        avatarUrl={avatarUrl}
+        notifications={notifications}
+        unreadCount={unreadCount}
+        pendingChangeCount={pendingChangeCount}
+      />
       <MobileTopBar notifications={notifications} unreadCount={unreadCount} />
 
       <div className="lg:pl-60">
@@ -29,7 +37,7 @@ export function AppShell({
         </main>
       </div>
 
-      <BottomNav />
+      <BottomNav pendingChangeCount={pendingChangeCount} />
     </div>
   );
 }

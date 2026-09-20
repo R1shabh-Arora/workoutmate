@@ -17,6 +17,7 @@ Supabase (Postgres). 11 numbered migrations, 19 tables, RLS everywhere. This doc
 | `0009_analytics.sql` | `analytics_events` — insert-only |
 | `0010_functions.sql` | `swap_workout_days()` RPC |
 | `0011_body_part_split.sql` | Adds `'body_part'` to `training_preferences.split_type` / `workout_plans.split_type`, and `'change_split'` to `pending_plan_changes.change_type` (CHECK constraints dropped and recreated — no new tables/columns) |
+| `0012_exercise_library_expansion.sql` | Adds `source`, `source_id`, `license`, `license_url`, `attribution`, `external_url`, `aliases`, `force` to `exercises`; a unique index on `(source, source_id)` (idempotent-upsert key for `scripts/import-exercises.ts`); a `movement_type` index; and a trigger-maintained `search_vector` (full-text search) — see "Exercise library" below |
 
 **Apply in order, always.** There's no "just run the latest one" shortcut — later migrations assume earlier tables/columns exist. `0007_coach.sql` in particular is easy to forget if you're bringing up a project incrementally, since it was added after the first batch, but `/coach` doesn't work at all without it.
 
@@ -34,7 +35,7 @@ Or paste each file into the Supabase dashboard's SQL Editor, in filename order, 
 
 **Identity / profile** — `profiles` (one row per user, auto-created by trigger), `fitness_goals` (many-to-one, one flagged `is_primary`), `training_preferences` (one row, equipment/split/location/etc.), `physical_limitations` (one row, injuries/limitations/exercises to avoid — informational only, never used to diagnose).
 
-**Shared exercise library** — `exercises` (~75 seeded rows, `is_active` public-read), `exercise_alternatives` (a substitution graph between exercises, also public-read). Neither is user-scoped; both are reference data.
+**Shared exercise library** — `exercises` (~930 rows, `is_active` public-read — see "Exercise library" below), `exercise_alternatives` (a substitution graph between exercises, also public-read). Neither is user-scoped; both are reference data.
 
 **The generated plan** — `workout_plans` (one `active` plan per user, enforced by a partial unique index on `profile_id where status = 'active'`), `workout_days` (one row per weekday per plan, including rest days — `is_rest_day` is explicit, there's no implicit "no row = rest"), `workout_exercises` (the prescribed sets/reps/rest per exercise per day). `profile_id` is denormalized onto `workout_days` and `workout_exercises` via `before insert` triggers, so RLS on child tables stays a flat `auth.uid() = profile_id` check instead of a join up through `workout_plans`.
 
@@ -75,6 +76,20 @@ Every user-owned table: `for all using (auth.uid() = profile_id) with check (aut
 ## Seed data
 
 `scripts/seed-exercises.ts` (run via `npm run db:seed`) upserts ~75 hand-authored exercises across chest/back/shoulders/arms/legs/core/full-body/cardio, plus their substitution links in `exercise_alternatives`. Idempotent — safe to re-run; it upserts by exercise name, not insert-only.
+
+## Exercise library: sourcing, licensing, and ingestion
+
+The library started at ~75 hand-authored exercises (`source: 'manual'`, no `license`/`source_id` — original content). `scripts/import-exercises.ts` (run via `npm run db:import-exercises`) adds ~850 more from [Free Exercise DB](https://github.com/yuhonas/free-exercise-db) (`source: 'free_exercise_db'`), bringing the library to ~930.
+
+**Why Free Exercise DB:** confirmed — via GitHub's own license-detection API against the repo, not the dataset's self-description — to be licensed under **The Unlicense** (public domain). [wger](https://github.com/wger-project/wger) was also evaluated: its application code is AGPL-3.0 (irrelevant here, this app doesn't use wger's code or run its server), but its own README states exercise/ingredient *data* is "Creative Commons (see individual entries)" — i.e. license varies per exercise, not one blanket license for the dataset. Correctly handling that would mean capturing a real per-row license from wger's live API at ingestion time, not assuming one; Free Exercise DB's single, verified, unambiguous public-domain license made it the source worth implementing first. `lib/data/exercise-import/types.ts`'s `ExerciseSourceAdapter` interface exists specifically so wger (or anything else) can be added later as a second adapter without touching the shared pipeline — implement fetch/normalize, list it in `scripts/import-exercises.ts`, done.
+
+**What was NOT imported: Free Exercise DB's images.** Its repository is Unlicensed as a whole, which would nominally cover the images too — but its own README traces the dataset's lineage back through another, older community-maintained dataset, and that kind of lineage is exactly the case where a downstream repo's own public-domain dedication doesn't necessarily establish clean rights over assets (as opposed to structured text data) it didn't originally create. Every imported row's `image_url`/`video_url` is left `null` rather than pointing at Free Exercise DB's hosted images. If a future source has unambiguous image rights, add `image_url`/`video_url` mapping to that source's own adapter — the column already exists and is unused by imported rows today, not a schema change.
+
+**Per-row provenance columns** (`source`, `source_id`, `license`, `license_url`, `attribution`, `external_url`, `aliases`, `force`, all added in `0012_exercise_library_expansion.sql`): every imported row carries its own license/attribution rather than one blanket assumption for the whole table, since a future second source could easily have different terms. `(source, source_id)` is uniquely indexed and is what `ON CONFLICT` upserts against, making the importer safe to re-run. Deliberately **not** added: a separate `mechanic` column — Free Exercise DB's `mechanic` (compound/isolation) is mapped straight onto the pre-existing `movement_type` column instead, since a second column would just duplicate it for no benefit.
+
+**Deduplication:** the importer normalizes each candidate name (trim, lowercase, collapse whitespace) and skips it if that name already exists under *any* source — so e.g. Free Exercise DB's own "Bench Press" doesn't create a near-duplicate of the hand-authored one. Re-running the importer updates its own previously-imported rows (matched by `source_id`) rather than re-skipping them as "duplicates of themselves."
+
+**Search:** `search_vector` (`exercises_set_search_vector()` trigger, weighted name > aliases > muscle/category) is GIN-indexed and backs both `/exercises`' search box (`lib/data/exercises.ts#searchExerciseLibrary`, server-side paginated — the library is far too large to ever send to the browser whole) and a broadened fallback in the AI coach's `replace_exercise` tool (`getSubstitutesForExercise`, `lib/data/substitutions.ts`) for when a same-muscle-same-movement-type match alone is too narrow. It's a plain trigger-maintained column, not a generated column, because `to_tsvector(regconfig, text)` is STABLE rather than IMMUTABLE in Postgres — a generated-column expression must be IMMUTABLE (SQLSTATE 42P17 otherwise).
 
 ## Database testing
 

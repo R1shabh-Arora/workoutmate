@@ -9,8 +9,10 @@ import type {
   Difficulty,
   EquipmentKey,
   ExerciseCategory,
+  ExerciseSource,
   ExperienceLevel,
   FitnessGoal,
+  ForceType,
   Location,
   MovementType,
   MuscleGroup,
@@ -166,6 +168,15 @@ export interface Database {
           image_url: string | null;
           is_unilateral: boolean;
           is_active: boolean;
+          source: ExerciseSource;
+          source_id: string | null;
+          license: string | null;
+          license_url: string | null;
+          attribution: string | null;
+          external_url: string | null;
+          aliases: string[];
+          force: ForceType | null;
+          search_vector: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -186,6 +197,14 @@ export interface Database {
           image_url?: string | null;
           is_unilateral?: boolean;
           is_active?: boolean;
+          source?: ExerciseSource;
+          source_id?: string | null;
+          license?: string | null;
+          license_url?: string | null;
+          attribution?: string | null;
+          external_url?: string | null;
+          aliases?: string[];
+          force?: ForceType | null;
           created_at?: string;
           updated_at?: string;
         };

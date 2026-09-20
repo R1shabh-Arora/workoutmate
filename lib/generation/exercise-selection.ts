@@ -1,8 +1,7 @@
-import type { Tables } from "@/lib/types/database.types";
-import type { ExperienceLevel } from "@/lib/types/enums";
-import type { ExerciseSlot } from "./types";
+import type { Difficulty, ExperienceLevel } from "@/lib/types/enums";
+import type { ExerciseSlot, PoolExercise } from "./types";
 
-const EXPERIENCE_CEILING: Record<ExperienceLevel, Array<Tables<"exercises">["difficulty"]>> = {
+const EXPERIENCE_CEILING: Record<ExperienceLevel, Difficulty[]> = {
   beginner: ["beginner"],
   intermediate: ["beginner", "intermediate"],
   advanced: ["beginner", "intermediate", "advanced"],
@@ -11,19 +10,19 @@ const EXPERIENCE_CEILING: Record<ExperienceLevel, Array<Tables<"exercises">["dif
 // Fallback order when nothing matches at the user's own ceiling — widen one
 // step at a time. A beginner with no true-beginner option for a slot should
 // land on intermediate before ever reaching advanced.
-const CEILING_FALLBACK_ORDER: Array<Tables<"exercises">["difficulty"]>[] = [
+const CEILING_FALLBACK_ORDER: Difficulty[][] = [
   ["beginner"],
   ["beginner", "intermediate"],
   ["beginner", "intermediate", "advanced"],
 ];
 
-function hasRequiredEquipment(exercise: Tables<"exercises">, available: ReadonlySet<string>): boolean {
+function hasRequiredEquipment(exercise: PoolExercise, available: ReadonlySet<string>): boolean {
   if (exercise.equipment.length === 0) return true;
   if (available.has("full_gym")) return true;
   return exercise.equipment.every((eq) => eq === "bodyweight" || available.has(eq));
 }
 
-function matchesSlot(exercise: Tables<"exercises">, slot: ExerciseSlot): boolean {
+function matchesSlot(exercise: PoolExercise, slot: ExerciseSlot): boolean {
   if (slot.movementType && exercise.movement_type !== slot.movementType) return false;
   return slot.muscles.includes(exercise.primary_muscle);
 }
@@ -40,7 +39,7 @@ function nameMatchesAny(name: string, terms: ReadonlySet<string>): boolean {
 
 export interface SelectExerciseParams {
   slot: ExerciseSlot;
-  pool: Tables<"exercises">[];
+  pool: PoolExercise[];
   experience: ExperienceLevel;
   availableEquipment: ReadonlySet<string>;
   excludedTerms: ReadonlySet<string>;
@@ -65,7 +64,7 @@ export function selectExercise({
   preferredTerms,
   usedTodayIds,
   seed,
-}: SelectExerciseParams): Tables<"exercises"> | null {
+}: SelectExerciseParams): PoolExercise | null {
   const base = pool.filter(
     (ex) =>
       matchesSlot(ex, slot) &&
@@ -79,7 +78,7 @@ export function selectExercise({
   const startIndex = CEILING_FALLBACK_ORDER.findIndex(
     (tier) => tier.length === EXPERIENCE_CEILING[experience].length
   );
-  let candidates: Tables<"exercises">[] = [];
+  let candidates: PoolExercise[] = [];
   for (let i = Math.max(0, startIndex); i < CEILING_FALLBACK_ORDER.length; i++) {
     const tier = new Set(CEILING_FALLBACK_ORDER[i]);
     candidates = base.filter((ex) => tier.has(ex.difficulty));

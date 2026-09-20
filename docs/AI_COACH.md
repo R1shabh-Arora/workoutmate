@@ -46,7 +46,7 @@ Defined in `buildCoachTools(supabase, profileId, conversationId)`, `lib/ai/tools
 
 | Tool | Proposes |
 |---|---|
-| `replace_exercise` | Swap one exercise for a suitable alternative |
+| `replace_exercise` | Swap one exercise for a suitable alternative. Tries curated alternatives first, then a same-muscle-same-movement-type match, then — if that's thin or the user named what they want (e.g. "something with dumbbells") — a full-text search across the ~930-exercise catalogue (`getSubstitutesForExercise`, `lib/data/substitutions.ts`). Never invents an exercise: every candidate is a real `exercises` row. |
 | `update_workout` | Change sets/rep range/rest for one exercise |
 | `move_workout` | Move a workout day to a different weekday (swaps with whatever's currently there, training day or rest) |
 | `adjust_workout_duration` | Trim or extend one day to fit a target time |

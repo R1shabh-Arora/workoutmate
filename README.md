@@ -55,14 +55,18 @@ proxy.ts                 Next 16's middleware — session refresh + protected-ro
 
 ### Why the workout generator isn't an LLM prompt
 
-`lib/generation/engine.ts` is a deterministic system: it resolves a split template (full body / upper-lower / push-pull-legs) from the user's days-per-week and preferences, fills each day's exercise slots from the exercise library (filtered by equipment, experience ceiling, injuries/dislikes), and prescribes sets/reps/rest from goal + training style + experience. It's covered by `tests/generation/`. The AI coach can *propose* changes to this structure through tools, but the actual numbers always come from this engine, not from free-form model output.
+`lib/generation/engine.ts` is a deterministic system: it resolves a split template (full body / upper-lower / push-pull-legs / body-part / custom) from the user's days-per-week and preferences, fills each day's exercise slots from the exercise library (filtered by equipment, experience ceiling, injuries/dislikes), and prescribes sets/reps/rest from goal + training style + experience. It's covered by `tests/generation/`. The AI coach can *propose* changes to this structure through tools, but the actual numbers always come from this engine, not from free-form model output.
+
+### Exercise library
+
+~930 exercises: ~75 hand-authored (`source: 'manual'`) plus 850+ imported from [Free Exercise DB](https://github.com/yuhonas/free-exercise-db) (`source: 'free_exercise_db'`), a public-domain (Unlicense) dataset — confirmed via GitHub's own license detection, not assumed. Only the structured text (name, muscles, equipment, instructions, etc.) was imported; its images were deliberately **not** imported, since the dataset's own lineage doesn't give the same confidence for image rights as for the text (see `docs/DATABASE.md`). `scripts/import-exercises.ts` is a reusable, idempotent ingestion pipeline (`lib/data/exercise-import/`) — adding another appropriately-licensed source later is one adapter, not a rewrite. Every row records its own `source`/`license`/`attribution`, dedupes against existing exercises by name, and is searchable via a Postgres full-text index (`/exercises`' search box and the AI coach's `replace_exercise` substitute lookup both use it).
 
 ### AI coach safety model
 
 The model never writes to the database directly. Its tools fall into two kinds:
 
 - **Read / log tools** (`get_user_profile`, `get_current_plan`, `get_today_workout`, `get_workout_history`, `get_exercise_history`, `get_progress`, `recommend_progression`, `log_workout`) execute immediately — they're read-only or purely additive.
-- **Plan-editing tools** (`replace_exercise`, `update_workout`, `move_workout`, `adjust_workout_duration`, `change_training_days`, `rebuild_plan`) only ever **insert a row into `pending_plan_changes`** describing the proposed change. The chat UI renders that as a confirmation card with *Apply Change* / *Cancel*. Only clicking **Apply Change** — a direct server action, never something the model can trigger on its own — commits the change (`lib/actions/coach.ts#applyPendingChange`).
+- **Plan-editing tools** (`replace_exercise`, `update_workout`, `move_workout`, `adjust_workout_duration`, `change_training_days`, `rebuild_plan`, `change_split`) only ever **insert a row into `pending_plan_changes`** describing the proposed change. The chat UI renders that as a confirmation card with *Apply Change* / *Cancel* — and states Pending/Applied/Cancelled/Expired/Failed, never a guess based on the model's own wording. Only clicking **Apply Change** — a direct server action, never something the model can trigger on its own — commits the change (`lib/actions/coach.ts#applyPendingChange`). A nav badge ("N pending plan changes") keeps a proposal discoverable even after scrolling past its card.
 
 This means the model can't silently rewrite your programme, and it can't claim to have made a change that didn't happen — the UI only shows "Applied" after the server confirms the write. Every tool's input is a Zod schema (via the AI SDK's `tool({ inputSchema })`); the model cannot call a tool with malformed arguments.
 
@@ -126,13 +130,19 @@ All variables live in `.env.local` for local dev (gitignored — never commit it
    ```bash
    npm run db:seed
    ```
-   This upserts ~75 exercises and their curated substitution links using the service-role key (bypasses RLS on purpose, since it's system reference data, not user data). Safe to re-run — it's an upsert, not an insert.
+   This upserts ~75 hand-authored exercises and their curated substitution links using the service-role key (bypasses RLS on purpose, since it's system reference data, not user data). Safe to re-run — it's an upsert, not an insert.
+
+   Optionally, expand it with the public-domain Free Exercise DB dataset (850+ more exercises):
+   ```bash
+   npm run db:import-exercises
+   ```
+   Also idempotent — re-running it updates existing imported rows rather than duplicating them, and skips anything that would duplicate an exercise the manual seed already has. See `docs/DATABASE.md` for what's imported and why images aren't.
 
 5. **Verify the schema landed correctly** before moving on (Table Editor, or SQL Editor for the queries below):
    - **Tables**: 19 tables under `public` — `profiles`, `fitness_goals`, `training_preferences`, `physical_limitations`, `exercises`, `exercise_alternatives`, `workout_plans`, `workout_days`, `workout_exercises`, `workout_sessions`, `set_logs`, `body_measurements`, `personal_records`, `coach_conversations`, `coach_messages`, `pending_plan_changes`, `notifications`, `notification_preferences`, `analytics_events`.
    - **RLS**: Table Editor shows a padlock/"RLS enabled" badge on every one of the 19 tables above — if any shows "RLS disabled," the app will still appear to work for you as the table owner but will leak data cross-user. Never disable RLS to "fix" a permissions error — fix the policy or the query instead.
    - **RPC**: `select proname from pg_proc where proname = 'swap_workout_days';` should return one row. This powers both "move a workout day" in `/plan` and the AI coach's `move_workout` tool.
-   - **Exercise data**: `select count(*) from exercises;` should return ~75 after seeding.
+   - **Exercise data**: `select count(*) from exercises;` should return ~75 after `db:seed`, or ~930 if you also ran `db:import-exercises`.
    - **Auto-provisioning**: `select tgname from pg_trigger where tgname = 'on_auth_user_created';` should return one row — this is what creates a `profiles` row automatically the moment someone signs in with Google for the first time.
 
 ### 5. Google OAuth setup
@@ -186,7 +196,8 @@ npm run lint          # ESLint
 npm run typecheck     # tsc --noEmit
 npm run test           # run the Vitest suite once
 npm run test:watch     # Vitest in watch mode
-npm run db:seed        # seed/re-sync the exercise library
+npm run db:seed        # seed/re-sync the hand-authored exercise library
+npm run db:import-exercises  # import the public-domain Free Exercise DB dataset (idempotent)
 npm run cf:preview      # build for Workers and preview it locally via wrangler
 npm run cf:deploy       # build for Workers and deploy (see Windows note below)
 npm run cf:typegen      # regenerate cloudflare-env.d.ts from wrangler.jsonc bindings

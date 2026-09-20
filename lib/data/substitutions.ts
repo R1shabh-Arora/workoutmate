@@ -5,12 +5,17 @@ import type { Tables } from "@/lib/types/database.types";
 /**
  * Finds good substitutes for an exercise: curated alternatives first (seeded
  * by movement pattern / target muscle), falling back to a same-primary-muscle
- * search if nothing curated is available. Always respects equipment and any
- * excluded terms (dislikes / avoid-list).
+ * search, then — if that's still thin, or the caller named what they're
+ * after (e.g. "something with dumbbells", "a cable row") — a full-text
+ * search across the catalogue's name/aliases/muscle/category (searchHint).
+ * The catalogue is ~900 exercises since the Free Exercise DB import (see
+ * docs/DATABASE.md); the strict same-muscle-same-movement-type match alone
+ * would miss good options a broader library actually has. Always respects
+ * equipment and any excluded terms (dislikes / avoid-list).
  */
 export async function getSubstitutesForExercise(
   exerciseId: string,
-  opts?: { equipment?: string[]; excludeTerms?: string[] }
+  opts?: { equipment?: string[]; excludeTerms?: string[]; searchHint?: string }
 ): Promise<Tables<"exercises">[]> {
   const { supabase } = await requireUser();
 
@@ -42,6 +47,21 @@ export async function getSubstitutesForExercise(
       .neq("id", exerciseId)
       .limit(8);
     candidates = data ?? [];
+  }
+
+  const hint = opts?.searchHint?.trim();
+  if (hint && (candidates.length < 3 || !candidates.some((c) => c.name.toLowerCase().includes(hint.toLowerCase())))) {
+    const { data: hinted } = await supabase
+      .from("exercises")
+      .select("*")
+      .textSearch("search_vector", hint, { type: "websearch", config: "english" })
+      .eq("is_active", true)
+      .neq("id", exerciseId)
+      .limit(8);
+    if (hinted && hinted.length > 0) {
+      const seen = new Set(candidates.map((c) => c.id));
+      candidates = [...candidates, ...hinted.filter((h) => !seen.has(h.id))];
+    }
   }
 
   const equipment = opts?.equipment;

@@ -37,12 +37,16 @@ components/     One folder per feature area (app-shell, auth, coach, dashboard, 
                 marketing, onboarding, plan, progress, settings, workout) plus ui/ for
                 shadcn-style primitives.
 lib/            actions/ (Server Actions), ai/ (coach system prompt, context, tools),
-                data/ (server-only read queries), generation/ (the deterministic workout
-                engine), progress/ (PR + progression logic, pure+tested), stores/ (Zustand),
-                supabase/ (client/server/middleware clients), types/ (hand-written DB types
-                + shared enums), validations/ (Zod schemas).
+                data/ (server-only read queries; data/exercise-import/ is the pluggable
+                ingestion pipeline for external exercise datasets), generation/ (the
+                deterministic workout engine), progress/ (PR + progression logic,
+                pure+tested), stores/ (Zustand), supabase/ (client/server/middleware
+                clients), types/ (hand-written DB types + shared enums), validations/
+                (Zod schemas).
 supabase/migrations/   Numbered SQL migrations — schema, RLS, RPCs. See docs/DATABASE.md.
-scripts/        seed-exercises.ts — idempotent exercise-library seed.
+scripts/        seed-exercises.ts (idempotent hand-authored exercise seed) and
+                import-exercises.ts (idempotent external-dataset ingestion — see
+                docs/DATABASE.md for what's imported and why).
 tests/          Vitest unit tests, mirroring lib/'s structure.
 public/         Static assets, PWA manifest, service worker, Cloudflare _headers.
 .claude/        settings.json (shared, committed) and launch.json (dev server config,
@@ -89,6 +93,7 @@ The AI coach never has unrestricted database access. Every tool call goes throug
 
 - The AI must never get unrestricted database access, and must never apply a plan change without the user explicitly confirming it through the UI.
 - Every generated/proposed exercise must come from the exercise library (`exercises` table) — never an invented name.
+- Exercise library content brought in from outside this project must be appropriately licensed, and the license must be verified (e.g. via the source's own repository/license file), never assumed from a dataset's description of itself. Record `source`/`license`/`license_url`/`attribution` on every imported row. Don't import an asset class (e.g. images) just because the surrounding data is cleanly licensed — check each asset type's own provenance. See `docs/DATABASE.md`.
 - Workout numbers (sets/reps/rest, progress stats, PRs, streaks) are either deterministic rule output or real calculations from logged data — never fabricated or estimated for display.
 - RLS must never be disabled to make something work. If a query fails because of RLS, fix the policy or the query — don't bypass it.
 - Secrets (`SUPABASE_SERVICE_ROLE_KEY`, `ANTHROPIC_API_KEY`, `CLOUDFLARE_API_TOKEN`) stay server-side/deploy-tooling-only, never in a `NEXT_PUBLIC_*` var, never committed. `.claude/settings.json` denies the `Read` tool from opening `.env.local`/`.dev.vars` as a backstop.

@@ -206,6 +206,30 @@ export type MovementType = (typeof MOVEMENT_TYPES)[number];
 export const DIFFICULTIES = ["beginner", "intermediate", "advanced"] as const;
 export type Difficulty = (typeof DIFFICULTIES)[number];
 
+// Where a library exercise's data came from. 'manual' = the original
+// hand-authored ~75 (no source_id, no license — original content). Adding
+// another source later means a new value here plus a migration extending
+// exercises_source_check, same pattern as adding a split type.
+export const EXERCISE_SOURCES = ["manual", "free_exercise_db"] as const;
+export type ExerciseSource = (typeof EXERCISE_SOURCES)[number];
+
+export const EXERCISE_SOURCE_LABELS: Record<ExerciseSource, string> = {
+  manual: "WorkoutMate",
+  free_exercise_db: "Free Exercise DB",
+};
+
+// push/pull/static — which direction load moves relative to the body.
+// Distinct from movement_type (compound/isolation/cardio/mobility): a
+// compound movement can be either a push (bench press) or a pull (row).
+export const FORCE_TYPES = ["push", "pull", "static"] as const;
+export type ForceType = (typeof FORCE_TYPES)[number];
+
+export const FORCE_LABELS: Record<ForceType, string> = {
+  push: "Push",
+  pull: "Pull",
+  static: "Static",
+};
+
 export const SESSION_STATUSES = ["in_progress", "completed", "skipped"] as const;
 export type SessionStatus = (typeof SESSION_STATUSES)[number];
 
