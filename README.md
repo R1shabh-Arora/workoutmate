@@ -4,7 +4,7 @@
 
 A production-ready AI fitness coaching platform: Google sign-in, a guided onboarding flow, a rules-based workout generation engine, a full workout-execution UI with rest timers, progress tracking with real calculated insights, and an AI coach with a controlled tool-calling architecture that never mutates your plan without an explicit confirmation.
 
-Live target: **https://workoutmate.rishabh.uk**
+Live: **https://workoutmate.rishabh.uk**
 
 ---
 
@@ -20,7 +20,7 @@ Live target: **https://workoutmate.rishabh.uk**
 | Charts | Recharts, with a colorblind-safe validated palette |
 | State | Zustand (client-only UI state: onboarding draft, active workout session) |
 | Testing | Vitest |
-| Hosting | Vercel |
+| Hosting | Cloudflare Workers, via the [OpenNext Cloudflare adapter](https://opennext.js.org/cloudflare) (`@opennextjs/cloudflare` + `wrangler`) |
 | Package manager | npm (`package-lock.json` is the lockfile of record — don't mix in pnpm/yarn) |
 
 ## Architecture at a glance
@@ -187,6 +187,9 @@ npm run typecheck     # tsc --noEmit
 npm run test           # run the Vitest suite once
 npm run test:watch     # Vitest in watch mode
 npm run db:seed        # seed/re-sync the exercise library
+npm run cf:preview      # build for Workers and preview it locally via wrangler
+npm run cf:deploy       # build for Workers and deploy (see Windows note below)
+npm run cf:typegen      # regenerate cloudflare-env.d.ts from wrangler.jsonc bindings
 ```
 
 ## Testing
@@ -203,15 +206,64 @@ Before shipping, all four of `typecheck`, `lint`, `test`, and `build` should be 
 
 ---
 
-## Deployment (Vercel)
+## Deployment (Cloudflare Workers)
 
-1. Push this repository to GitHub (or GitLab/Bitbucket).
-2. [vercel.com/new](https://vercel.com/new) → import the repository. Vercel auto-detects Next.js: build command `next build`, output handled automatically, Node.js runtime for Route Handlers/Server Actions — no manual framework configuration needed.
-3. **Settings → Environment Variables**: add all six variables from the table in [Environment variables](#3-environment-variables) above, scoped to **Production** (and Preview, if you want preview deployments to work against the same or a separate Supabase project). Set `NEXT_PUBLIC_SITE_URL` to `https://workoutmate.rishabh.uk` for the Production environment specifically.
-4. Deploy.
-5. **Settings → Domains**: add `workoutmate.rishabh.uk`. Vercel will display the exact DNS record it needs (typically a `CNAME` targeting `cname.vercel-dns.com` for a subdomain, or an `A` record to Vercel's anycast IP for an apex domain) — **use the exact value Vercel's dashboard shows for your project, not a generic example**, since these can change. Add that record with whichever service hosts DNS for `rishabh.uk`.
-6. Wait for Vercel to show the domain as **Valid Configuration** with an issued SSL certificate (automatic via Let's Encrypt, usually within minutes of DNS propagating).
-7. Back in Supabase **Authentication → URL Configuration**, confirm `https://workoutmate.rishabh.uk/auth/callback` is in the redirect URL allow-list (see [Google OAuth setup](#5-google-oauth-setup) step 6) — do this even if you did it during local setup, since it's easy to have only added the localhost one.
+WorkoutMate deploys to Cloudflare Workers via the [OpenNext Cloudflare adapter](https://opennext.js.org/cloudflare), which builds Next's real output (not a reimplementation of it) and transforms it to run on `workerd`. Cloudflare also has a newer, beta, Vite-based path (`vinext`) — this project intentionally uses OpenNext instead, since it's the more mature, still-supported option and this app leans on Server Actions, streaming AI SDK responses, and several Route Handlers that are safer to trust to the adapter that runs Next's actual build.
+
+### 1. One-time setup
+
+Already done in this repo — noted here so the pieces make sense:
+
+- `wrangler.jsonc` — the Worker's config: `name: "workoutmate"`, `main: ".open-next/worker.js"`, `compatibility_flags: ["nodejs_compat", "global_fetch_strictly_public"]`, an `assets` binding for static files, and a `WORKER_SELF_REFERENCE` service binding OpenNext uses internally.
+- `open-next.config.ts` — adapter config (default, no R2 incremental cache — this app is almost entirely dynamic/user-scoped rather than statically revalidated, so it isn't needed yet).
+- `next.config.ts` calls `initOpenNextCloudflareForDev()`, **gated behind `NODE_ENV === "development"`**. Don't remove that gate: calling it unconditionally makes `next build` start a local `workerd` instance from every parallel build worker, all racing to open the same local SQLite state file — a real crash (`SQLITE_CANTOPEN`/`SQLITE_BUSY`), not a hypothetical one.
+
+### 2. Build and deploy
+
+```bash
+npm run cf:deploy
+```
+
+This runs `opennextjs-cloudflare build` (which runs `next build` internally, then transforms the output for Workers) followed by `opennextjs-cloudflare deploy`.
+
+**Windows-specific note:** `opennextjs-cloudflare deploy` (and a plain `wrangler deploy`, which auto-detects this as an OpenNext project and redirects to the same command) spins up a local Miniflare/`workerd` instance as part of its own deploy process, independent of the dev-mode guard above — and on Windows this instance can fail the same way (`SQLITE_CANTOPEN`), which the tooling itself warns about ("OpenNext is not fully compatible with Windows"). If you hit this, build separately and deploy with wrangler's autoconfig disabled, which uploads the already-built `.open-next/worker.js` directly without going through that local proxy step:
+```bash
+npx opennextjs-cloudflare build
+npx wrangler deploy --autoconfig=false
+```
+This isn't a workaround for an app bug — it's the same deployment, just skipping a local-only bindings-resolution step this platform's tooling doesn't yet handle reliably outside WSL/Linux/macOS.
+
+### 3. Environment variables and secrets
+
+Two different mechanisms, because Workers isn't a Node process with a live `.env` file:
+
+- **`NEXT_PUBLIC_*` variables** (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `NEXT_PUBLIC_SITE_URL`) are inlined into the build by Next.js at `next build` time — set them in `.env.local` **before** running `npm run cf:deploy`, not after. Changing one always means rebuild + redeploy, not just a dashboard edit.
+- **Server-only secrets** (`SUPABASE_SERVICE_ROLE_KEY`, `OPENAI_API_KEY`, optionally `OPENAI_MODEL`) are read at request time, not build time — set these with `wrangler secret put`, which stores them encrypted on Cloudflare and doesn't require a rebuild to change:
+  ```bash
+  npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
+  npx wrangler secret put OPENAI_API_KEY
+  ```
+  (Each prompts for the value interactively — nothing to type on the command line, so it never ends up in shell history.)
+
+`CLOUDFLARE_API_TOKEN` is neither of these — it's read only by the `wrangler`/`opennextjs-cloudflare` CLIs on the machine doing the deploying, never by the app itself.
+
+### 4. Custom domain
+
+Prefer a **Workers Custom Domain** over a manually-managed CNAME — Cloudflare provisions the DNS record and the SSL certificate for you and keeps them in sync with the Worker:
+
+```bash
+# One-time, via the API (Workers & Pages → workoutmate → Settings → Domains & Routes
+# in the dashboard does the same thing):
+curl -X PUT "https://api.cloudflare.com/client/v4/accounts/<account_id>/workers/domains" \
+  -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: application/json" \
+  -d '{"zone_id":"<zone_id>","hostname":"workoutmate.rishabh.uk","service":"workoutmate","environment":"production"}'
+```
+
+This creates a read-only, proxied DNS record pointing at the Worker and issues a dedicated certificate — don't also create a manual `CNAME`/`A` record for the same hostname, they'd conflict.
+
+### 5. Google OAuth and Supabase redirect URLs
+
+Same as local setup (see [Google OAuth setup](#5-google-oauth-setup)) — confirm `https://workoutmate.rishabh.uk/auth/callback` is in Supabase's **Authentication → URL Configuration** redirect allow-list. Easy to add only the localhost one during development and forget this step.
 
 ### Post-deploy checklist
 
@@ -233,6 +285,6 @@ Actually verify each of these against the live URL before calling the deployment
 Documented here rather than left as a silent gap:
 
 - **Payments** — the schema and code are structured so a Free/Pro split and Stripe billing can be added later without rearchitecting (no payment code exists yet).
-- **Push/email notifications** — the `notifications` and `notification_preferences` tables and the settings UI toggles exist; nothing currently sends a push or email, they'd need a scheduled job (e.g. a Vercel Cron hitting a route handler) wired to a provider.
+- **Push/email notifications** — the `notifications` and `notification_preferences` tables and the settings UI toggles exist; nothing currently sends a push or email, they'd need a scheduled job (e.g. a [Cloudflare Cron Trigger](https://developers.cloudflare.com/workers/configuration/cron-triggers/) on this Worker) wired to a provider.
 - **`create_workout` AI tool** (converting a rest day into a training day) — the coach handles "add a day" via `change_training_days` with an incremented count instead of a dedicated tool.
 - **Admin panel** — no UI exists, but exercises/plans are normal tables an admin surface could be built against later.
