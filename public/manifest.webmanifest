@@ -1,0 +1,17 @@
+{
+  "name": "WorkoutMate — AI Fitness Coach",
+  "short_name": "WorkoutMate",
+  "description": "Your workout. Your goals. Your AI coach.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0B0E1A",
+  "theme_color": "#0B0E1A",
+  "categories": ["health", "fitness", "lifestyle"],
+  "icons": [
+    { "src": "/icons/icon-192", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/maskable-512", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

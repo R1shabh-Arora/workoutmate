@@ -1,0 +1,207 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ── WorkoutMate design tokens ──────────────────────────────────────────
+   Restrained neutral palette + one strong accent (indigo). Dark mode is the
+   primary/default aesthetic (Whoop/Oura/Linear-adjacent); light mode is a
+   fully supported, equally polished alternative — not an afterthought.   */
+
+:root {
+  --background: hsl(220 20% 99%);
+  --foreground: hsl(224 24% 10%);
+
+  --card: hsl(0 0% 100%);
+  --card-foreground: hsl(224 24% 10%);
+
+  --popover: hsl(0 0% 100%);
+  --popover-foreground: hsl(224 24% 10%);
+
+  --primary: hsl(243 75% 59%);
+  --primary-foreground: hsl(0 0% 100%);
+
+  --secondary: hsl(220 20% 95%);
+  --secondary-foreground: hsl(224 20% 15%);
+
+  --muted: hsl(220 20% 95.5%);
+  --muted-foreground: hsl(220 9% 44%);
+
+  --accent: hsl(220 20% 94%);
+  --accent-foreground: hsl(224 20% 15%);
+
+  --destructive: hsl(0 72% 48%);
+  --destructive-foreground: hsl(0 0% 100%);
+
+  --success: hsl(152 60% 36%);
+  --success-foreground: hsl(0 0% 100%);
+  --warning: hsl(38 92% 42%);
+  --warning-foreground: hsl(0 0% 100%);
+
+  --border: hsl(220 15% 89%);
+  --input: hsl(220 15% 89%);
+  --ring: hsl(243 75% 59%);
+
+  /* Categorical chart palette — validated colorblind-safe + contrast via
+     dataviz skill's validate_palette.js (light mode, surface #fcfcfb). */
+  --chart-1: #5048e5;
+  --chart-2: #148f7e;
+  --chart-3: #c9710d;
+  --chart-4: #ce275f;
+  --chart-5: #137bae;
+
+  --radius: 0.875rem;
+}
+
+.dark {
+  --background: hsl(224 26% 6%);
+  --foreground: hsl(220 20% 97%);
+
+  --card: hsl(224 22% 9%);
+  --card-foreground: hsl(220 20% 97%);
+
+  --popover: hsl(224 22% 8%);
+  --popover-foreground: hsl(220 20% 97%);
+
+  --primary: hsl(243 88% 69%);
+  --primary-foreground: hsl(224 26% 8%);
+
+  --secondary: hsl(220 16% 15%);
+  --secondary-foreground: hsl(220 20% 97%);
+
+  --muted: hsl(220 16% 14%);
+  --muted-foreground: hsl(220 10% 65%);
+
+  --accent: hsl(220 16% 17%);
+  --accent-foreground: hsl(220 20% 97%);
+
+  --destructive: hsl(0 78% 63%);
+  --destructive-foreground: hsl(224 26% 8%);
+
+  --success: hsl(152 55% 48%);
+  --success-foreground: hsl(224 26% 8%);
+  --warning: hsl(38 92% 58%);
+  --warning-foreground: hsl(224 26% 8%);
+
+  --border: hsl(220 15% 18%);
+  --input: hsl(220 15% 18%);
+  --ring: hsl(243 88% 69%);
+
+  /* Validated colorblind-safe + contrast for dark surface #1a1a19. */
+  --chart-1: #665ff2;
+  --chart-2: #22a08f;
+  --chart-3: #c67110;
+  --chart-4: #e1477a;
+  --chart-5: #228abf;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  --radius-sm: calc(var(--radius) - 6px);
+  --radius-md: calc(var(--radius) - 3px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 6px);
+  --radius-2xl: calc(var(--radius) + 14px);
+
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  --animate-fade-in: fade-in 0.4s ease-out;
+  --animate-slide-up: slide-up 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-scale-in: scale-in 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes slide-up {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes scale-in {
+    from { opacity: 0; transform: scale(0.96); }
+    to { opacity: 1; transform: scale(1); }
+  }
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  ::selection {
+    background-color: var(--primary);
+    color: var(--primary-foreground);
+  }
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  *::-webkit-scrollbar-thumb {
+    background-color: var(--border);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  .bg-grid-fade {
+    background-image:
+      linear-gradient(to bottom, transparent, var(--background) 85%),
+      linear-gradient(to right, var(--border) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--border) 1px, transparent 1px);
+    background-size: 100% 100%, 48px 48px, 48px 48px;
+    mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, black 40%, transparent 100%);
+  }
+}
