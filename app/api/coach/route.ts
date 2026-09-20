@@ -1,5 +1,5 @@
 import { streamText, convertToModelMessages, stepCountIs, type UIMessage } from "ai";
-import { openai } from "@ai-sdk/openai";
+import { anthropic } from "@ai-sdk/anthropic";
 import { createClient } from "@/lib/supabase/server";
 import { COACH_SYSTEM_PROMPT } from "@/lib/ai/system-prompt";
 import { buildCoachContext } from "@/lib/ai/context";
@@ -8,7 +8,8 @@ import type { Json } from "@/lib/types/database.types";
 
 export const maxDuration = 60;
 
-const MODEL_ID = process.env.OPENAI_MODEL || "gpt-4o-mini";
+// The `anthropic` provider reads ANTHROPIC_API_KEY from the environment itself.
+const MODEL_ID = process.env.ANTHROPIC_MODEL || "claude-sonnet-5";
 
 export async function POST(req: Request) {
   const supabase = await createClient();
@@ -74,7 +75,7 @@ export async function POST(req: Request) {
   const modelMessages = await convertToModelMessages(messages);
 
   const result = streamText({
-    model: openai(MODEL_ID),
+    model: anthropic(MODEL_ID),
     system: `${COACH_SYSTEM_PROMPT}\n\n${contextBlock}`,
     messages: modelMessages,
     tools,

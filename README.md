@@ -16,7 +16,7 @@ Live: **https://workoutmate.rishabh.uk**
 | Language | TypeScript, strict mode |
 | UI | React 19, Tailwind CSS v4, hand-rolled shadcn-style components (Radix primitives) |
 | Auth + DB | Supabase (Postgres, Row Level Security, Google OAuth) |
-| AI | OpenAI via the Vercel AI SDK (`ai` + `@ai-sdk/openai` + `@ai-sdk/react`), tool-calling |
+| AI | Anthropic Claude via the Vercel AI SDK (`ai` + `@ai-sdk/anthropic` + `@ai-sdk/react`), tool-calling |
 | Charts | Recharts, with a colorblind-safe validated palette |
 | State | Zustand (client-only UI state: onboarding draft, active workout session) |
 | Testing | Vitest |
@@ -71,7 +71,7 @@ This means the model can't silently rewrite your programme, and it can't claim t
 - Every user-owned table is Row-Level-Security-scoped to `auth.uid() = profile_id` (or `= id` for `profiles`) — see [Supabase setup](#supabase-setup) for how to verify this on a live project.
 - The only non-scoped `select` policies are `exercises` (public read, `is_active = true`) and `exercise_alternatives` (public read) — both are shared reference data with no user information.
 - `SUPABASE_SERVICE_ROLE_KEY` (bypasses RLS) is read only in `lib/supabase/server.ts#createServiceRoleClient`, which is never imported from a Client Component — Next.js's `next/headers` boundary would fail the build if it were.
-- `OPENAI_API_KEY` is read only by the AI SDK's OpenAI provider inside `app/api/coach/route.ts`, a server-only Route Handler. It is never sent to the browser.
+- `ANTHROPIC_API_KEY` is read only by the AI SDK's Anthropic provider inside `app/api/coach/route.ts`, a server-only Route Handler. It is never sent to the browser.
 - The `swap_workout_days` RPC (used by both "My Plan" and the `move_workout` AI tool) runs `security invoker` — RLS still applies — and additionally checks `auth.uid()` ownership of both rows explicitly before writing.
 
 ---
@@ -84,7 +84,7 @@ This means the model can't silently rewrite your programme, and it can't claim t
 - npm (ships with Node)
 - A [Supabase](https://supabase.com) account
 - A [Google Cloud](https://console.cloud.google.com) account (for the OAuth client)
-- An [OpenAI](https://platform.openai.com) account
+- An [Anthropic](https://console.anthropic.com) account
 
 ### 2. Clone and install dependencies
 
@@ -102,8 +102,8 @@ All variables live in `.env.local` for local dev (gitignored — never commit it
 | `NEXT_PUBLIC_SUPABASE_URL` | **Public** (bundled into client JS) | Yes | Supabase → Project Settings → API → Project URL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | **Public** — safe to expose; every query it makes is still enforced by RLS | Yes | Supabase → Project Settings → API → anon public key |
 | `SUPABASE_SERVICE_ROLE_KEY` | **Server-only secret** — bypasses RLS entirely | Yes | Supabase → Project Settings → API → service_role key |
-| `OPENAI_API_KEY` | **Server-only secret** | Yes | platform.openai.com/api-keys |
-| `OPENAI_MODEL` | Server-only, optional | No (defaults to `gpt-4o-mini`) | Any current OpenAI model your account can access |
+| `ANTHROPIC_API_KEY` | **Server-only secret** | Yes | console.anthropic.com/settings/keys |
+| `ANTHROPIC_MODEL` | Server-only, optional | No (defaults to `claude-sonnet-5`) | Any current Claude model ID your account can access |
 | `NEXT_PUBLIC_SITE_URL` | **Public** | Yes | `http://localhost:3000` locally, `https://workoutmate.rishabh.uk` in production |
 
 "Public" here means `NEXT_PUBLIC_*` — Next.js inlines these into the client bundle at build time. They are safe to expose specifically because every Supabase call made with the anon key is still subject to Row Level Security; they are not a substitute for auth. Google's OAuth Client ID/Secret are **not** app environment variables at all — they're pasted directly into the Supabase dashboard (see [Google OAuth setup](#google-oauth-setup)).
@@ -159,12 +159,12 @@ Google sign-in is configured **in Supabase's dashboard**, not in this app's code
 
 / verify: an incognito-window sign-in should land on Google's account chooser, then bounce through `<project-ref>.supabase.co/auth/v1/callback`, then land on `/auth/callback` on your own domain, then `/onboarding` or `/dashboard`. If it instead shows a Google "redirect_uri_mismatch" error, the URI in step 3 doesn't exactly match (check for trailing slashes and http vs https).
 
-### 6. OpenAI setup
+### 6. Anthropic setup
 
-1. Create a key at [platform.openai.com/api-keys](https://platform.openai.com/api-keys).
-2. Set it as `OPENAI_API_KEY` in `.env.local` (and later, in Vercel's environment variables).
-3. Optionally set `OPENAI_MODEL` to override the default (`gpt-4o-mini`) — left as an env var rather than hardcoded since model availability/pricing changes over time and this lets you upgrade without a code change.
-4. No further OpenAI-side configuration is needed — tool-calling, streaming, and the propose/confirm gating are all implemented in this repo (`lib/ai/tools.ts`, `app/api/coach/route.ts`), not configured on OpenAI's side.
+1. Create a key at [console.anthropic.com/settings/keys](https://console.anthropic.com/settings/keys).
+2. Set it as `ANTHROPIC_API_KEY` in `.env.local` (and later, as a `wrangler secret` for production — see [Deployment](#deployment-cloudflare-workers)).
+3. Optionally set `ANTHROPIC_MODEL` to override the default (`claude-sonnet-5`) — left as an env var rather than hardcoded since it lets you upgrade without a code change.
+4. No further Anthropic-side configuration is needed — tool-calling, streaming, and the propose/confirm gating are all implemented in this repo (`lib/ai/tools.ts`, `app/api/coach/route.ts`), not configured on Anthropic's side.
 
 ### 7. Run it
 
@@ -194,7 +194,7 @@ npm run cf:typegen      # regenerate cloudflare-env.d.ts from wrangler.jsonc bin
 
 ## Testing
 
-`npm run test` runs the Vitest suite (`tests/`): the generation engine's split/exercise-selection/prescription logic, exercise substitution matching, progression-recommendation and PR-detection logic, and Zod validation schemas. These are pure-function unit tests with no live Supabase/OpenAI dependency, so they run the same in CI as locally. `server-only`-guarded modules (anything that touches the DB directly) are kept thin wrappers around pure, tested logic specifically so the business logic itself stays testable — see `lib/progress/progression-logic.ts` vs `lib/progress/progression.ts` for the pattern.
+`npm run test` runs the Vitest suite (`tests/`): the generation engine's split/exercise-selection/prescription logic, exercise substitution matching, progression-recommendation and PR-detection logic, and Zod validation schemas. These are pure-function unit tests with no live Supabase/Anthropic dependency, so they run the same in CI as locally. `server-only`-guarded modules (anything that touches the DB directly) are kept thin wrappers around pure, tested logic specifically so the business logic itself stays testable — see `lib/progress/progression-logic.ts` vs `lib/progress/progression.ts` for the pattern.
 
 ## Production build
 
@@ -238,10 +238,10 @@ This isn't a workaround for an app bug — it's the same deployment, just skippi
 Two different mechanisms, because Workers isn't a Node process with a live `.env` file:
 
 - **`NEXT_PUBLIC_*` variables** (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `NEXT_PUBLIC_SITE_URL`) are inlined into the build by Next.js at `next build` time — set them in `.env.local` **before** running `npm run cf:deploy`, not after. Changing one always means rebuild + redeploy, not just a dashboard edit.
-- **Server-only secrets** (`SUPABASE_SERVICE_ROLE_KEY`, `OPENAI_API_KEY`, optionally `OPENAI_MODEL`) are read at request time, not build time — set these with `wrangler secret put`, which stores them encrypted on Cloudflare and doesn't require a rebuild to change:
+- **Server-only secrets** (`SUPABASE_SERVICE_ROLE_KEY`, `ANTHROPIC_API_KEY`, optionally `ANTHROPIC_MODEL`) are read at request time, not build time — set these with `wrangler secret put`, which stores them encrypted on Cloudflare and doesn't require a rebuild to change:
   ```bash
   npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
-  npx wrangler secret put OPENAI_API_KEY
+  npx wrangler secret put ANTHROPIC_API_KEY
   ```
   (Each prompts for the value interactively — nothing to type on the command line, so it never ends up in shell history.)
 
