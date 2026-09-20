@@ -1,6 +1,6 @@
 # Database
 
-Supabase (Postgres). 10 numbered migrations, 19 tables, RLS everywhere. This document explains what each table is *for* and how they relate — the migration files themselves (`supabase/migrations/*.sql`) are the source of truth for exact columns/constraints; don't let this doc's prose drift from them without updating both.
+Supabase (Postgres). 11 numbered migrations, 19 tables, RLS everywhere. This document explains what each table is *for* and how they relate — the migration files themselves (`supabase/migrations/*.sql`) are the source of truth for exact columns/constraints; don't let this doc's prose drift from them without updating both.
 
 ## Migrations
 
@@ -16,6 +16,7 @@ Supabase (Postgres). 10 numbered migrations, 19 tables, RLS everywhere. This doc
 | `0008_notifications.sql` | `notifications`, `notification_preferences` |
 | `0009_analytics.sql` | `analytics_events` — insert-only |
 | `0010_functions.sql` | `swap_workout_days()` RPC |
+| `0011_body_part_split.sql` | Adds `'body_part'` to `training_preferences.split_type` / `workout_plans.split_type`, and `'change_split'` to `pending_plan_changes.change_type` (CHECK constraints dropped and recreated — no new tables/columns) |
 
 **Apply in order, always.** There's no "just run the latest one" shortcut — later migrations assume earlier tables/columns exist. `0007_coach.sql` in particular is easy to forget if you're bringing up a project incrementally, since it was added after the first batch, but `/coach` doesn't work at all without it.
 

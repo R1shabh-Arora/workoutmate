@@ -141,7 +141,7 @@ Full walkthrough, including a real Windows-specific build/deploy gotcha and its 
 
 ## Git attribution
 
-Commits in this repository should **not** include `Co-Authored-By: Claude` or any other Claude/Anthropic attribution line — this is configured via `.claude/settings.local.json` (`attribution: { commit: "", pr: "" }`), the current Claude Code mechanism for this. Earlier commits (before this was configured) do carry that line; they were not rewritten and shouldn't be. Keep using the repository's own configured git author identity for everything new.
+Commits in this repository must **not** include `Co-Authored-By: Claude` or any other Claude/Anthropic attribution line — this is configured via `.claude/settings.local.json` (`attribution: { commit: "", pr: "" }`), the current Claude Code mechanism for this. The three earliest commits originally carried that trailer before this was configured; history was later rewritten (`git commit-tree`, preserving every author/date/tree/message exactly except removing the trailer, then `push --force-with-lease`) specifically to remove it, since this is a solo repository the owner controls. Keep using the repository's own configured git author identity for everything new, and don't rewrite history again without the same explicit, deliberate request and safeguards.
 
 ## Keeping this file honest
 

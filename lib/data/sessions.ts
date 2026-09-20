@@ -1,8 +1,11 @@
 import "server-only";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireUser } from "./profile";
 import { getDateStringInTimezone, getDayOfWeekInTimezone, getStartOfWeekIso } from "@/lib/date-tz";
 import type { PlanWithDays } from "./plan";
-import type { Tables } from "@/lib/types/database.types";
+import type { Database, Tables } from "@/lib/types/database.types";
+
+type DbClient = SupabaseClient<Database>;
 
 export interface WeeklyStats {
   completed: number;
@@ -13,12 +16,17 @@ export interface WeeklyStats {
 
 export async function getWeeklyStats(daysPerWeek: number, timezone: string): Promise<WeeklyStats> {
   const { supabase, user } = await requireUser();
+  return getWeeklyStatsForUser(supabase, user.id, daysPerWeek, timezone);
+}
+
+/** Same as getWeeklyStats(), but takes an already-authenticated client — see getActivePlanForUser() for why. */
+export async function getWeeklyStatsForUser(supabase: DbClient, userId: string, daysPerWeek: number, timezone: string): Promise<WeeklyStats> {
   const weekStartIso = getStartOfWeekIso(timezone);
 
   const { data: sessions } = await supabase
     .from("workout_sessions")
     .select("total_volume_kg")
-    .eq("profile_id", user.id)
+    .eq("profile_id", userId)
     .eq("status", "completed")
     .gte("started_at", weekStartIso);
 
@@ -41,6 +49,11 @@ export async function getWeeklyStats(daysPerWeek: number, timezone: string): Pro
  */
 export async function getCurrentStreak(plan: PlanWithDays | null, timezone: string): Promise<number> {
   const { supabase, user } = await requireUser();
+  return getCurrentStreakForUser(supabase, user.id, plan, timezone);
+}
+
+/** Same as getCurrentStreak(), but takes an already-authenticated client — see getActivePlanForUser() for why. */
+export async function getCurrentStreakForUser(supabase: DbClient, userId: string, plan: PlanWithDays | null, timezone: string): Promise<number> {
   if (!plan) return 0;
 
   const trainingDows = new Set(plan.days.filter((d) => !d.is_rest_day).map((d) => d.day_of_week));
@@ -52,7 +65,7 @@ export async function getCurrentStreak(plan: PlanWithDays | null, timezone: stri
   const { data: sessions } = await supabase
     .from("workout_sessions")
     .select("started_at")
-    .eq("profile_id", user.id)
+    .eq("profile_id", userId)
     .eq("status", "completed")
     .gte("started_at", since.toISOString());
 
@@ -86,10 +99,15 @@ export async function getCurrentStreak(plan: PlanWithDays | null, timezone: stri
 
 export async function getRecentSessions(limit = 10): Promise<Tables<"workout_sessions">[]> {
   const { supabase, user } = await requireUser();
+  return getRecentSessionsForUser(supabase, user.id, limit);
+}
+
+/** Same as getRecentSessions(), but takes an already-authenticated client — see getActivePlanForUser() for why. */
+export async function getRecentSessionsForUser(supabase: DbClient, userId: string, limit = 10): Promise<Tables<"workout_sessions">[]> {
   const { data } = await supabase
     .from("workout_sessions")
     .select("*")
-    .eq("profile_id", user.id)
+    .eq("profile_id", userId)
     .order("started_at", { ascending: false })
     .limit(limit);
   return data ?? [];
@@ -133,10 +151,15 @@ export async function getSessionWithLogs(sessionId: string) {
 /** All logged sets for one exercise, most recent first — used for exercise history and progression. */
 export async function getExerciseHistory(exerciseId: string, limit = 50): Promise<Tables<"set_logs">[]> {
   const { supabase, user } = await requireUser();
+  return getExerciseHistoryForUser(supabase, user.id, exerciseId, limit);
+}
+
+/** Same as getExerciseHistory(), but takes an already-authenticated client — see getActivePlanForUser() for why. */
+export async function getExerciseHistoryForUser(supabase: DbClient, userId: string, exerciseId: string, limit = 50): Promise<Tables<"set_logs">[]> {
   const { data } = await supabase
     .from("set_logs")
     .select("*")
-    .eq("profile_id", user.id)
+    .eq("profile_id", userId)
     .eq("exercise_id", exerciseId)
     .eq("is_completed", true)
     .order("completed_at", { ascending: false })

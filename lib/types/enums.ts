@@ -66,13 +66,14 @@ export const GOAL_DESCRIPTIONS: Record<FitnessGoal, string> = {
   athletic_performance: "Train for sport-specific power, speed and agility.",
 };
 
-export const SPLIT_TYPES = ["full_body", "upper_lower", "push_pull_legs", "custom"] as const;
+export const SPLIT_TYPES = ["full_body", "upper_lower", "push_pull_legs", "body_part", "custom"] as const;
 export type SplitType = (typeof SPLIT_TYPES)[number];
 
 export const SPLIT_LABELS: Record<SplitType, string> = {
   full_body: "Full Body",
   upper_lower: "Upper / Lower",
   push_pull_legs: "Push / Pull / Legs",
+  body_part: "Chest / Triceps · Back / Biceps · Shoulders / Abs · Legs",
   custom: "Custom",
 };
 
@@ -241,6 +242,7 @@ export const PENDING_CHANGE_TYPES = [
   "change_training_days",
   "create_workout",
   "rebuild_plan",
+  "change_split",
   "other",
 ] as const;
 export type PendingChangeType = (typeof PENDING_CHANGE_TYPES)[number];

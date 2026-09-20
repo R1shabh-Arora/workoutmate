@@ -10,6 +10,7 @@ const PROPOSE_TOOLS = new Set([
   "adjust_workout_duration",
   "change_training_days",
   "rebuild_plan",
+  "change_split",
 ]);
 
 const TOOL_LABELS: Record<string, string> = {

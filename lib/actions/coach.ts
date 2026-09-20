@@ -122,7 +122,8 @@ export async function applyPendingChange(pendingChangeId: string) {
     }
 
     case "change_training_days":
-    case "rebuild_plan": {
+    case "rebuild_plan":
+    case "change_split": {
       const generatedPlan = payload.generatedPlan as GeneratedPlan;
       await persistPlan(supabase, user.id, generatedPlan, "ai");
       break;

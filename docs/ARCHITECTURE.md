@@ -45,12 +45,12 @@ Nothing here is an LLM call. The Zod validation is the same "never save malforme
 
 `lib/generation/engine.ts` is pure, deterministic, unit-tested logic with no Supabase/network dependency:
 
-1. **Split selection** (`split-templates.ts`) — resolves a template (full body / upper-lower / push-pull-legs / custom) from days-per-week and the user's stated preference.
+1. **Split selection** (`split-templates.ts`) — resolves a template (full body / upper-lower / push-pull-legs / body-part / custom) from days-per-week and the user's stated preference. `body_part` cycles four fixed day templates (Chest & Triceps → Back & Biceps → Shoulders & Abs → Legs) via `pattern[i % 4]`, the same mechanism `push_pull_legs` uses for its own 3-day cycle — so 5/6/7 training days naturally repeat from the top rather than needing special-cased logic. It's a first-class, explicitly-selectable split, never an auto-resolved fallback for `custom` (`autoSplitFor()` only ever resolves `custom` to full_body/upper_lower/push_pull_legs by day count, untouched by this addition).
 2. **Schedule** (`schedule.ts`) — assigns training days to the user's preferred weekdays, fills the rest with explicit rest days (every weekday gets a `workout_days` row, `is_rest_day` true or false — there's no implicit "day with no row").
 3. **Exercise selection** (`exercise-selection.ts`) — fills each day's slots from the exercise library, filtered by equipment, injuries/avoided exercises, and an experience-level ceiling that widens progressively (beginner → beginner+intermediate → all) only if a slot can't otherwise be filled, rather than jumping straight to "any difficulty."
 4. **Prescription** (`prescription.ts`) — sets/reps/rest/intensity guidance from goal + training style + experience.
 
-The AI coach can trigger this same engine (via `change_training_days` and `rebuild_plan`) but never generates plan structure itself — see `docs/AI_COACH.md`.
+The AI coach can trigger this same engine (via `change_training_days`, `rebuild_plan`, and `change_split`) but never generates plan structure itself — see `docs/AI_COACH.md`.
 
 ## Workout execution / logging flow
 
@@ -62,6 +62,18 @@ The AI coach can trigger this same engine (via `change_training_days` and `rebui
 ## AI Coach request flow
 
 See `docs/AI_COACH.md` for full depth. In short: `app/api/coach/route.ts` authenticates the request, checks the caller against a per-user Cloudflare Rate Limiting binding (`lib/ai/rate-limit.ts` — rejects with `429` before any other work if exceeded), persists the incoming user message, builds a condensed context block (`lib/ai/context.ts` — not a full DB dump), builds the tool set (`lib/ai/tools.ts`), and streams a Claude response via the Vercel AI SDK, persisting the assistant's reply (and any tool calls) when the stream ends.
+
+## A production incident: Cloudflare Error 1102 on `/api/coach`
+
+On 2026-09-20 a real user hit Cloudflare Error 1102 ("Worker exceeded resource limits") while using the AI Coach. Diagnosed from Cloudflare's own Workers Observability telemetry for the exact Ray ID (`a3e38d65bc19ed14`), not guessed: `outcome: "exceededCpu"`, `cpuTimeMs: 10` (this Cloudflare account is on the Workers Free plan, a hard 10ms CPU-time ceiling per invocation), `wallTimeMs: 46`. The low wall time matters — it ruled out `maxDuration = 60` (a Next.js Route Handler wall-clock allowance) as remotely relevant; the Worker was killed by Cloudflare's own CPU accounting almost immediately, likely before the Anthropic stream had even started (network I/O wait doesn't consume CPU time — only synchronous JS execution does).
+
+**Root cause, found by reading the code, not by trial and error:** every `lib/data/*.ts` function the coach path touches (`getActivePlan`, `getWeeklyStats`, `getCurrentStreak`, `getRecentSessions`, `getExerciseHistory`, `getWeightHistory`, `getAllPRs`, `getVolumeInsight`) independently called `requireUser()`, which constructs a **new** Supabase server client and makes a **fresh network round-trip** to re-verify the caller's JWT via `auth.getUser()` — even though `app/api/coach/route.ts` had already authenticated the request once at the top. `buildCoachContext()` alone triggered 3 of these redundant client-construction-plus-reauth cycles on *every single* coach request, before any tool even ran; a conversation involving tool calls could trigger several more. A second, compounding cost: `buildCoachTools()` constructed all 14 tools' Zod `inputSchema`s fresh on every request, rather than once per Worker isolate — real, avoidable CPU spent on JSON-Schema conversion the Anthropic API needs for every tool call, whether or not that tool was ever invoked.
+
+**Fix (both parts, no functionality removed):**
+1. Added `*ForUser(supabase, userId, ...)` variants of every affected `lib/data/*.ts` function that take an already-authenticated client instead of self-authenticating. The original self-authenticating exports are unchanged (still used by Server Components/Actions that don't already have a client in scope) — they're now thin wrappers delegating to the `ForUser` variant. `lib/ai/context.ts` and `lib/ai/tools.ts` now call the `ForUser` variants directly with the client `route.ts` already has, eliminating every redundant re-auth on the coach path.
+2. Hoisted all 14 tool input schemas in `lib/ai/tools.ts` to module-level constants, built once when the Worker isolate loads, reused across every request it handles — instead of being reconstructed inside `buildCoachTools()` on every call.
+
+Verified live after deploying: two real authenticated `POST /api/coach` requests (one plain conversational, one that triggered `get_current_plan`) both completed with Cloudflare's own telemetry showing `outcome: "ok"`. See `docs/AI_COACH.md` for the rate-limiting design (separate from this fix, added the same session) and `CHANGELOG.md` for the dated entry.
 
 ## AI tool execution flow
 

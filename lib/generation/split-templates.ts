@@ -82,6 +82,48 @@ const LEGS: DayTemplate = {
   ],
 };
 
+// body_part split — a classic 4-day rotation: Chest/Triceps, Back/Biceps,
+// Shoulders/Abs, Legs, then repeats. Explicitly selectable — never an
+// auto-resolved fallback for "custom" the way upper_lower/push_pull_legs are.
+const CHEST_TRICEPS: DayTemplate = {
+  name: "Chest & Triceps",
+  focusMuscleGroups: ["chest", "triceps"],
+  slots: [
+    { muscles: ["chest"], movementType: "compound", priority: "primary" },
+    { muscles: ["chest"], movementType: "compound", priority: "primary" },
+    { muscles: ["chest"], movementType: "isolation", priority: "secondary" },
+    { muscles: ["triceps"], movementType: "compound", priority: "secondary" },
+    { muscles: ["triceps"], movementType: "isolation", priority: "secondary" },
+    { muscles: ["triceps"], movementType: "isolation", priority: "finisher" },
+  ],
+};
+
+const BACK_BICEPS: DayTemplate = {
+  name: "Back & Biceps",
+  focusMuscleGroups: ["lats", "upper_back", "biceps"],
+  slots: [
+    { muscles: ["lats"], movementType: "compound", priority: "primary" },
+    { muscles: ["upper_back"], movementType: "compound", priority: "primary" },
+    { muscles: ["lats", "upper_back"], movementType: "compound", priority: "secondary" },
+    { muscles: ["biceps"], movementType: "isolation", priority: "secondary" },
+    { muscles: ["biceps"], movementType: "isolation", priority: "secondary" },
+    { muscles: ["biceps", "forearms"], movementType: "isolation", priority: "finisher" },
+  ],
+};
+
+const SHOULDERS_ABS: DayTemplate = {
+  name: "Shoulders & Abs",
+  focusMuscleGroups: ["shoulders", "abs"],
+  slots: [
+    { muscles: ["shoulders"], movementType: "compound", priority: "primary" },
+    { muscles: ["shoulders"], movementType: "compound", priority: "primary" },
+    { muscles: ["shoulders"], movementType: "isolation", priority: "secondary" },
+    { muscles: ["shoulders"], movementType: "isolation", priority: "secondary" },
+    { muscles: ["abs", "obliques"], movementType: "isolation", priority: "secondary" },
+    { muscles: ["abs", "obliques"], movementType: "isolation", priority: "finisher" },
+  ],
+};
+
 const CARDIO_CORE: DayTemplate = {
   name: "Cardio & Core",
   focusMuscleGroups: ["cardio", "abs"],
@@ -112,6 +154,11 @@ export function resolveDayTemplates(splitType: SplitType, daysPerWeek: number): 
     case "push_pull_legs": {
       const pattern = [PUSH, PULL, LEGS];
       return Array.from({ length: daysPerWeek }, (_, i) => pattern[i % 3]!);
+    }
+
+    case "body_part": {
+      const pattern = [CHEST_TRICEPS, BACK_BICEPS, SHOULDERS_ABS, LEGS];
+      return Array.from({ length: daysPerWeek }, (_, i) => pattern[i % 4]!);
     }
 
     default:

@@ -1,6 +1,9 @@
 import "server-only";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireUser } from "./profile";
-import type { Tables } from "@/lib/types/database.types";
+import type { Database, Tables } from "@/lib/types/database.types";
+
+type DbClient = SupabaseClient<Database>;
 
 export type WorkoutExerciseWithDetails = Tables<"workout_exercises"> & { exercise: Tables<"exercises"> };
 export type WorkoutDayWithExercises = Tables<"workout_days"> & { exercises: WorkoutExerciseWithDetails[] };
@@ -9,11 +12,22 @@ export type PlanWithDays = Tables<"workout_plans"> & { days: WorkoutDayWithExerc
 /** Loads the signed-in user's active plan with every day and exercise, fully joined and typed. */
 export async function getActivePlan(): Promise<PlanWithDays | null> {
   const { supabase, user } = await requireUser();
+  return getActivePlanForUser(supabase, user.id);
+}
 
+/**
+ * Same as getActivePlan(), but takes an already-authenticated client instead
+ * of calling requireUser() itself. Use this from a caller (like the AI coach
+ * route) that has already authenticated once this request — requireUser()
+ * builds a fresh Supabase client and makes its own network round-trip to
+ * re-verify the session, which is wasted work if that's already been done,
+ * and compounds fast across a multi-tool-call coach turn.
+ */
+export async function getActivePlanForUser(supabase: DbClient, userId: string): Promise<PlanWithDays | null> {
   const { data: plan } = await supabase
     .from("workout_plans")
     .select("*")
-    .eq("profile_id", user.id)
+    .eq("profile_id", userId)
     .eq("status", "active")
     .maybeSingle();
 

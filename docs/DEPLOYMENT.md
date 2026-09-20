@@ -66,6 +66,10 @@ Every page threw an uncaught `ReferenceError: __name is not defined` in producti
 
 Requires wrangler `4.13.0+` (this project uses `4.135.0`). Verify the fix with a genuinely fresh browser tab (not a reused one — console history from before a fix can look identical to a live error) and check for zero console errors on load.
 
+### Cloudflare Error 1102 on `/api/coach` (fixed, keep this fix)
+
+This Cloudflare account is on the **Workers Free plan** — a hard 10ms CPU-time limit per invocation (not wall-clock time; only actual synchronous JS execution counts, not time spent awaiting a subrequest). A real production request hit this limit and got Cloudflare's 1102 error page. Root cause and fix are documented in full in `docs/ARCHITECTURE.md`'s "A production incident" section — short version: several `lib/data/*.ts` functions the coach route depends on were redundantly re-authenticating (constructing a new Supabase client and re-verifying the session over the network) instead of reusing the client `route.ts` already had, and all 14 AI tool schemas were being rebuilt on every request instead of once per Worker isolate. Both were fixed without removing any functionality. If `/api/coach` (or any future Route Handler doing meaningful work) starts throwing 1102 again, check Workers Observability for the failing Ray ID's `$workers.outcome`/`cpuTimeMs` first (see `docs/AI_COACH.md`'s testing section for the exact API call) rather than reaching for a bigger Cloudflare plan — the Free plan's limit can't be raised by config, and the underlying "am I doing redundant synchronous work on every request" question is worth asking regardless of plan.
+
 ## Custom domain
 
 `workoutmate.rishabh.uk` is attached as a **Cloudflare Workers Custom Domain**, not a manual CNAME — Cloudflare provisions both the DNS record and the SSL certificate and keeps them in sync with the Worker automatically:
@@ -99,6 +103,8 @@ After any deploy, actually check the live URL — don't assume:
 - [ ] Sign in, complete onboarding, confirm a plan is generated and visible on `/dashboard`
 - [ ] Start today's workout, log a set, finish it, confirm it shows up on `/progress` (weekly count, streak, and — on a first workout — a PR)
 - [ ] Ask the AI coach an actionable question, confirm a proposal card appears, confirm nothing changes in the database until you click Apply, confirm it does change after
+- [ ] Ask the AI coach to switch to the body-part split by name; confirm it calls `change_split` (not just replying in text), the card shows a pending proposal, and the model's own text never claims the change already happened
+- [ ] Reload `/coach` after an Apply and after a Cancel; confirm the card shows the real persisted state (Applied / Cancelled), not the Apply/Cancel buttons again
 
 ## Rollback considerations
 

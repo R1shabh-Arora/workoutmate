@@ -1,8 +1,8 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/types/database.types";
-import { getActivePlan, getWorkoutDayByDow } from "@/lib/data/plan";
-import { getCurrentStreak, getWeeklyStats } from "@/lib/data/sessions";
+import { getActivePlanForUser, getWorkoutDayByDow } from "@/lib/data/plan";
+import { getCurrentStreakForUser, getWeeklyStatsForUser } from "@/lib/data/sessions";
 import { getDayOfWeekInTimezone } from "@/lib/date-tz";
 import { calculateAge } from "@/lib/utils";
 import { GOAL_LABELS, type FitnessGoal } from "@/lib/types/enums";
@@ -23,12 +23,12 @@ export async function buildCoachContext(supabase: DbClient, userId: string): Pro
 
   if (!profile) return "No profile found for this user.";
 
-  const plan = await getActivePlan();
+  const plan = await getActivePlanForUser(supabase, userId);
   const todayDow = getDayOfWeekInTimezone(profile.timezone);
   const today = plan ? getWorkoutDayByDow(plan, todayDow) : null;
   const [weeklyStats, streak] = await Promise.all([
-    getWeeklyStats(plan?.days_per_week ?? 0, profile.timezone),
-    getCurrentStreak(plan, profile.timezone),
+    getWeeklyStatsForUser(supabase, userId, plan?.days_per_week ?? 0, profile.timezone),
+    getCurrentStreakForUser(supabase, userId, plan, profile.timezone),
   ]);
 
   const primaryGoal = goals?.find((g) => g.is_primary)?.goal as FitnessGoal | undefined;
