@@ -1,0 +1,32 @@
+# Changelog
+
+Development milestones that have actually happened, sourced from git history and session records — not a forward-looking plan (see `docs/PROJECT_STATUS.md` for that). Dates are from actual commit timestamps where a milestone has one.
+
+All development to date happened in a single continuous session on **2026-09-20**; the times below are that day's actual commit timestamps, not separate days.
+
+## 2026-09-20
+
+**15:05 — `ac19bf1` feat: initial WorkoutMate production build**
+Google-authenticated fitness coaching app built from scratch: guided onboarding, a deterministic workout generation engine, workout execution with rest timers and PR detection, progress tracking, and an AI coach with a propose-then-confirm tool-calling architecture. Next.js 16, React 19, TypeScript, Tailwind v4, Supabase (Postgres, RLS, Google OAuth), OpenAI (original AI provider) via the Vercel AI SDK. 65 Vitest tests, clean typecheck/lint/build across 23 routes. This was the first commit to the repository — nothing was committed before it.
+
+**18:37 — `01840d1` feat: deploy to Cloudflare Workers via OpenNext**
+Moved hosting from the originally-planned Vercel to Cloudflare Workers, via the OpenNext adapter (`@opennextjs/cloudflare` + `wrangler`) rather than Cloudflare's newer beta `vinext` (chose the more mature, Next-build-output-based path over a beta Vite reimplementation). Along the way: found and fixed a real Windows-specific crash (`initOpenNextCloudflareForDev()` needed a `NODE_ENV === "development"` guard, or parallel `next build` workers race to open the same local SQLite state file) and a second one in the deploy command itself (worked around with `wrangler deploy --autoconfig=false`, not a code change). Deployed the Worker and attached `workoutmate.rishabh.uk` as a Cloudflare Workers Custom Domain (auto-provisioned DNS + SSL). This was the first time the app was live at a real URL.
+
+**Same session, before 19:23 (not a separate commit) — Supabase production connection**
+Connected the app to a real Supabase project, applied all 10 migrations, seeded the exercise library, and set `SUPABASE_SERVICE_ROLE_KEY` as a Cloudflare Worker secret. Verified live (not just from migration source): all 19 tables exist with RLS enabled, 20 policies present, the `swap_workout_days` RPC exists, and — critically — an anonymous write to a user-scoped table is actually rejected by RLS, not just theoretically protected.
+
+**19:23 — `6986acf` feat: switch AI Coach from OpenAI to Anthropic Claude**
+Swapped `@ai-sdk/openai` for `@ai-sdk/anthropic` in `app/api/coach/route.ts`. Model, system prompt, tools, context building, and the propose/confirm persistence flow are all provider-agnostic through the Vercel AI SDK and were unchanged. Model ID `claude-sonnet-5`, confirmed against Anthropic's current model documentation rather than assumed. Removed the now-unused `@ai-sdk/openai` dependency and `OPENAI_API_KEY`/`OPENAI_MODEL` references from docs and `.env.example`.
+
+**Same session, after 6986acf — AI Coach end-to-end production verification**
+Set `ANTHROPIC_API_KEY` as a Worker secret, rebuilt, redeployed. Live-tested (via a throwaway Supabase-admin-created test account, never touching real user credentials): a basic conversational question (with real tool-retrieved data in the answer), an actionable request that correctly self-corrected after an ambiguous first tool call, a real confirmation card, a confirmed database change (`replace_exercise`), a second proposal explicitly **rejected** via Cancel with the database verified unchanged, and — separately — full workout execution (start → log sets → finish), which produced a real streak and a real "Longest workout" PR on `/progress`. Also used the AI coach's `move_workout` tool live for the first time (moving a training day onto a rest day), independently verifying that tool beyond its earlier unit-level existence.
+
+**20:04 — `a3c10eb` fix: resolve __name ReferenceError on Cloudflare + add shared Claude Code config**
+Found (via browser console inspection during the AI Coach verification above) and fixed a production bug: every page threw `ReferenceError: __name is not defined`, caused by esbuild's `keep-names` transform interacting badly with `next-themes`' stringified no-flash script under the Cloudflare/OpenNext bundling path. Fixed with `"keep_names": false` in `wrangler.jsonc` (a documented OpenNext/Wrangler option), verified clean on a genuinely fresh browser tab after redeploying. Also added `.claude/settings.json` (shared, committed) — denies the `Read` tool on `.env.local`/`.dev.vars`, and gates `git push --force`/`git reset --hard`/DROP-pattern commands behind confirmation — and un-ignored `.claude/` in git (it had been blanket-ignored, which would have kept shared config from ever reaching a future session or contributor) while keeping the personal `.claude/settings.local.json` out.
+
+**Same session, after a3c10eb — persistent project documentation**
+Added `CLAUDE.md` and `docs/` (`ARCHITECTURE.md`, `DATABASE.md`, `AI_COACH.md`, `DEPLOYMENT.md`, `PROJECT_STATUS.md`) plus this changelog, so the project's actual current state — not the original plan — is discoverable by a future session without re-deriving it from source. Configured Claude Code's `attribution` setting (`.claude/settings.local.json`) so future commits don't carry a `Co-Authored-By: Claude` line; the four commits above, made before that was configured, still do and were left as-is rather than rewritten.
+
+---
+
+*Earlier entries in this changelog should stay dated and factual — if you're adding to this file, use the actual date and describe what genuinely happened, not what was planned.*
