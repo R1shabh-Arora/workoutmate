@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { COACH_SYSTEM_PROMPT } from "@/lib/ai/system-prompt";
 import { buildCoachContext } from "@/lib/ai/context";
 import { buildCoachTools } from "@/lib/ai/tools";
+import { checkCoachRateLimit } from "@/lib/ai/rate-limit";
 import type { Json } from "@/lib/types/database.types";
 
 export const maxDuration = 60;
@@ -19,6 +20,14 @@ export async function POST(req: Request) {
 
   if (!user) {
     return new Response("Unauthorized", { status: 401 });
+  }
+
+  const withinRateLimit = await checkCoachRateLimit(user.id);
+  if (!withinRateLimit) {
+    return new Response("You're sending messages a bit fast — please wait a moment and try again.", {
+      status: 429,
+      headers: { "Retry-After": "60" },
+    });
   }
 
   let body: { messages: UIMessage[]; conversationId?: string };

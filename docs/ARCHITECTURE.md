@@ -61,7 +61,7 @@ The AI coach can trigger this same engine (via `change_training_days` and `rebui
 
 ## AI Coach request flow
 
-See `docs/AI_COACH.md` for full depth. In short: `app/api/coach/route.ts` authenticates the request, persists the incoming user message, builds a condensed context block (`lib/ai/context.ts` — not a full DB dump), builds the tool set (`lib/ai/tools.ts`), and streams a Claude response via the Vercel AI SDK, persisting the assistant's reply (and any tool calls) when the stream ends.
+See `docs/AI_COACH.md` for full depth. In short: `app/api/coach/route.ts` authenticates the request, checks the caller against a per-user Cloudflare Rate Limiting binding (`lib/ai/rate-limit.ts` — rejects with `429` before any other work if exceeded), persists the incoming user message, builds a condensed context block (`lib/ai/context.ts` — not a full DB dump), builds the tool set (`lib/ai/tools.ts`), and streams a Claude response via the Vercel AI SDK, persisting the assistant's reply (and any tool calls) when the stream ends.
 
 ## AI tool execution flow
 
@@ -78,10 +78,11 @@ Summarized here; full table-by-table detail in `docs/DATABASE.md`. 19 tables, al
 
 | Boundary | Enforced by |
 |---|---|
-| User A can't read/write User B's data | Postgres RLS, scoped to `auth.uid()` — live-tested, not just inspected (see `docs/DATABASE.md`) |
+| User A can't read/write User B's data | Postgres RLS, scoped to `auth.uid()` — live-tested with two real authenticated accounts across every user-owned table (select/update/delete, both directions), not just inspected (see `docs/DATABASE.md`) |
 | Browser never sees `SUPABASE_SERVICE_ROLE_KEY` / `ANTHROPIC_API_KEY` | Both are non-`NEXT_PUBLIC_` env vars, read only in server-only files; the production build fails if one leaks into a client bundle |
 | AI can't mutate the plan directly | Plan-editing tools can only insert a `pending_plan_changes` row; `applyPendingChange()` is the sole write path, gated on the user's own click |
 | AI tool inputs can't be malformed | Every tool has a Zod `inputSchema`, enforced by the AI SDK before `execute` runs |
+| `/api/coach` can't be hammered for unbounded Anthropic spend | Per-user Cloudflare Rate Limiting binding (`COACH_RATE_LIMITER`, 20 req/60s), checked server-side before any model call — see `docs/AI_COACH.md` |
 | Secrets don't reach source control | `.gitignore` covers `.env.local`/`.dev.vars`; `.claude/settings.json` also denies the `Read` tool on both as a backstop |
 
 ## Deployment architecture

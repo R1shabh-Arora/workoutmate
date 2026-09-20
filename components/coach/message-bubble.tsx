@@ -49,7 +49,14 @@ function ToolPart({ part }: { part: Extract<UIMessage["parts"][number], { type: 
     const output = part.output as Record<string, unknown> | undefined;
 
     if (isProposal && output?.proposed === true) {
-      return <ConfirmationCard pendingChangeId={output.pendingChangeId as string} summary={output.summary as string} />;
+      const currentStatus = output.currentStatus as "pending" | "applied" | "cancelled" | "expired" | undefined;
+      return (
+        <ConfirmationCard
+          pendingChangeId={output.pendingChangeId as string}
+          summary={output.summary as string}
+          initialStatus={currentStatus ?? "pending"}
+        />
+      );
     }
     if (isProposal && output?.proposed === false) {
       return (

@@ -12,6 +12,13 @@
   "services": [
     { "binding": "WORKER_SELF_REFERENCE", "service": "workoutmate" }
   ],
+  "ratelimits": [
+    {
+      "name": "COACH_RATE_LIMITER",
+      "namespace_id": "1001",
+      "simple": { "limit": 20, "period": 60 }
+    }
+  ],
   "observability": {
     "enabled": true
   }

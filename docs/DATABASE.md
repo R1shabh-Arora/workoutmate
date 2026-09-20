@@ -58,7 +58,10 @@ Or paste each file into the Supabase dashboard's SQL Editor, in filename order, 
 
 Every user-owned table: `for all using (auth.uid() = profile_id) with check (auth.uid() = profile_id)` (or `= id` on `profiles` itself, with `select`/`update` split there specifically). Two intentional exceptions, both public-read reference data with no user information: `exercises` (`is_active = true`) and `exercise_alternatives` (`using (true)`). `analytics_events` is insert-only — `with check (auth.uid() = profile_id)`, no `select` policy at all.
 
-**Never disable RLS to fix an application error.** If a query fails, the fix is either the policy (if it's genuinely too strict) or the query (if it's not scoping correctly) — not turning RLS off. This has been live-tested against production, not just read from the migration source: an anonymous write to a user-scoped table is rejected with a real `42501` Postgres error, and an anonymous read of one returns an empty result rather than leaking a row.
+**Never disable RLS to fix an application error.** If a query fails, the fix is either the policy (if it's genuinely too strict) or the query (if it's not scoping correctly) — not turning RLS off. This has been live-tested against production twice, not just read from the migration source:
+
+- **Anonymous vs. owner:** an anonymous write to a user-scoped table is rejected with a real `42501` Postgres error, and an anonymous read of one returns an empty result rather than leaking a row.
+- **Two real authenticated users cross-checking each other:** two throwaway accounts, each with its own real row in every user-owned table (`profiles`, `fitness_goals`, `training_preferences`, `workout_plans`, `workout_sessions`, `set_logs`, `body_measurements`, `personal_records`, `coach_conversations`, `coach_messages`, `pending_plan_changes`), attempted `select`/`update`/`delete` against the other's rows by id, using each account's own authenticated (anon-key) client — never the service-role key. Every cross-user attempt returned zero rows and left the target row unchanged, in both directions, across all 11 tables. Both test accounts were deleted afterward (cascades, verified empty).
 
 ## RPCs / functions
 

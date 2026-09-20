@@ -17,7 +17,7 @@ Cloudflare's newer `vinext` (a Vite plugin reimplementing the Next.js API surfac
 
 ## One-time project setup (already done, explained for context)
 
-- `wrangler.jsonc` — Worker name `workoutmate`, `main: ".open-next/worker.js"`, `compatibility_flags: ["nodejs_compat", "global_fetch_strictly_public"]`, an `assets` binding, a `WORKER_SELF_REFERENCE` service binding OpenNext uses internally, and `"keep_names": false` (see the Windows bug below).
+- `wrangler.jsonc` — Worker name `workoutmate`, `main: ".open-next/worker.js"`, `compatibility_flags: ["nodejs_compat", "global_fetch_strictly_public"]`, an `assets` binding, a `WORKER_SELF_REFERENCE` service binding OpenNext uses internally, a `COACH_RATE_LIMITER` Rate Limiting binding (`/api/coach` abuse protection — see `docs/AI_COACH.md`), and `"keep_names": false` (see the Windows bug below). Whenever a binding is added or changed here, re-run `npm run cf:typegen` before building — otherwise TypeScript won't know the new binding exists on `env`.
 - `open-next.config.ts` — default config, no R2-backed ISR cache (this app is almost entirely dynamic/user-scoped, not statically revalidated).
 - `next.config.ts` calls `initOpenNextCloudflareForDev()`, **gated behind `NODE_ENV === "development"`**. Do not remove that gate — calling it unconditionally makes `next build` start a local `workerd`/Miniflare instance from every parallel build worker, all racing to open the same local SQLite state file, which crashes the build (`SQLITE_CANTOPEN`/`SQLITE_BUSY`).
 

@@ -1,13 +1,23 @@
 "use client";
 
 import { useState } from "react";
-import { Check, X, Loader2, Sparkles } from "lucide-react";
+import { Check, X, Loader2, Sparkles, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { applyPendingChange, cancelPendingChange } from "@/lib/actions/coach";
 
-export function ConfirmationCard({ pendingChangeId, summary }: { pendingChangeId: string; summary: string }) {
-  const [status, setStatus] = useState<"pending" | "applying" | "applied" | "cancelled">("pending");
+type CardStatus = "pending" | "applying" | "applied" | "cancelled" | "expired";
+
+export function ConfirmationCard({
+  pendingChangeId,
+  summary,
+  initialStatus = "pending",
+}: {
+  pendingChangeId: string;
+  summary: string;
+  initialStatus?: Exclude<CardStatus, "applying">;
+}) {
+  const [status, setStatus] = useState<CardStatus>(initialStatus);
 
   async function handleApply() {
     setStatus("applying");
@@ -40,6 +50,15 @@ export function ConfirmationCard({ pendingChangeId, summary }: { pendingChangeId
       <div className="mt-2 flex items-center gap-2 rounded-xl border border-border bg-muted px-4 py-3 text-sm text-muted-foreground">
         <X className="size-4 shrink-0" />
         Cancelled — no changes made.
+      </div>
+    );
+  }
+
+  if (status === "expired") {
+    return (
+      <div className="mt-2 flex items-center gap-2 rounded-xl border border-border bg-muted px-4 py-3 text-sm text-muted-foreground">
+        <Clock className="size-4 shrink-0" />
+        This proposal expired — ask again if you&apos;d still like this change.
       </div>
     );
   }

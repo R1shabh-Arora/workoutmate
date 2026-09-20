@@ -12,6 +12,7 @@
 | Piece | File |
 |---|---|
 | API route (streaming, tool-calling loop) | `app/api/coach/route.ts` |
+| Rate limiting | `lib/ai/rate-limit.ts` (binding declared in `wrangler.jsonc`) |
 | System prompt | `lib/ai/system-prompt.ts` |
 | Context retrieval | `lib/ai/context.ts` |
 | Tool definitions | `lib/ai/tools.ts` |
@@ -68,9 +69,20 @@ There is deliberately no `create_workout` tool (turning a rest day into a traini
 2. The chat UI's `ToolPart` renderer (`components/coach/message-bubble.tsx`) recognizes plan-editing tool names (the `PROPOSE_TOOLS` set — keep this in sync with `lib/ai/tools.ts` if you add a tool) and renders `ConfirmationCard` instead of a plain text response.
 3. **Apply Change** → `applyPendingChange(pendingChangeId)` (`lib/actions/coach.ts`): re-fetches the row scoped to `status = 'pending'` **and** the caller's own `profile_id`, switches on `change_type`, performs the real write, then marks the row `applied`. Clicking Apply on an already-resolved row is a safe no-op ("this proposal is no longer available") — the status re-check, not client state, is what prevents a double-apply.
 4. **Cancel** → `cancelPendingChange(pendingChangeId)`: marks the row `cancelled`, writes nothing else.
-5. Both card states persist in `coach_messages`/`pending_plan_changes`, so the audit trail (`applied` vs `cancelled`, with a timestamp) survives a page reload — even though the confirmation card's own visual state on a reloaded conversation doesn't currently re-derive "already resolved" (a known, non-blocking UI gap — see `docs/PROJECT_STATUS.md`).
+5. Both card states persist in `coach_messages`/`pending_plan_changes`, so the audit trail (`applied` vs `cancelled`, with a timestamp) survives a page reload. `getConversationUIMessages()` (`lib/data/coach.ts`) re-derives this on every load: it collects every `pendingChangeId` referenced by a `proposed: true` tool output in the conversation's history, batch-fetches those rows' current `status` from `pending_plan_changes`, and stamps a `currentStatus` field onto each tool output before handing messages to the client. `ConfirmationCard` (`components/coach/confirmation-card.tsx`) takes that as its `initialStatus` prop instead of always assuming `pending`, so a reloaded conversation shows **Applied**/**Cancelled**/**Expired** immediately for already-resolved proposals — only a genuinely still-pending proposal renders the Apply/Cancel buttons.
 
-This has been live-verified against production, not just read from source: a proposal sitting unconfirmed leaves the underlying tables untouched; clicking Cancel leaves them untouched and marks the row `cancelled`; clicking Apply is the only path that changes them, and the change is visible in the same request cycle on `/plan` and the dashboard.
+This has been live-verified against production, not just read from source: a proposal sitting unconfirmed leaves the underlying tables untouched; clicking Cancel leaves them untouched and marks the row `cancelled`; clicking Apply is the only path that changes them, and the change is visible in the same request cycle on `/plan` and the dashboard. The status re-derivation on reload is a **display-only** fix — `applyPendingChange()`/`cancelPendingChange()` already re-checked `status = 'pending'` server-side before this fix and still do; the UI could never actually cause a double-apply even before, it could just misleadingly *look* actionable after a reload.
+
+## Rate limiting
+
+`POST /api/coach` is rate-limited server-side by Cloudflare's Workers [Rate Limiting binding](https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/) (`wrangler.jsonc`: `COACH_RATE_LIMITER`, 20 requests per 60-second window, keyed by the authenticated user's id). The check (`lib/ai/rate-limit.ts`, `checkCoachRateLimit()`) runs immediately after the auth check and before any model call, context build, or database write — a request that's about to be rejected does no other work. An exceeded limit returns `429` with a plain-text, non-technical message and a `Retry-After: 60` header; the client (`components/coach/chat-shell.tsx`) surfaces that message directly instead of a generic error, so the user sees "you're sending messages a bit fast" rather than an opaque failure.
+
+Why this shape:
+- **Workers-native, not a new dependency.** The binding is provisioned entirely through `wrangler.jsonc` (no KV/D1 namespace to create, no third-party service like Upstash to wire up) and costs nothing extra to run.
+- **Per-user, not per-IP.** Keyed by `user.id`, so it can't be reset by switching networks and doesn't depend on any client-side throttling (which the requirements explicitly rule out as the sole protection).
+- **Fails open, loudly.** If the binding is missing or the call throws, `checkCoachRateLimit()` logs the error server-side and allows the request rather than taking down the AI Coach over an infrastructure hiccup. A silent, permanent bypass would defeat the point, but a transient failure shouldn't become a full outage of the flagship feature either.
+- **Known limitation, accepted deliberately:** Cloudflare's Simple rate limiter is "eventually consistent... not an accurate accounting system," and its counters are local to the Cloudflare location the Worker runs in — a user whose requests land on different PoPs could see a slightly higher effective ceiling than 20/60s. That's an acceptable trade for zero added latency and zero added infrastructure; it is not intended as a precise billing-grade quota. If a hard, exact cap is ever needed, the next step would be a Supabase-backed counter (RPC + table), not a bigger Cloudflare limit.
+- **20/60s was chosen, not derived from usage data** — generous enough that no real back-and-forth conversation should ever hit it (a human isn't typing faster than roughly one message every 3 seconds sustained), tight enough to stop a scripted loop from running up the Anthropic bill.
 
 ## Error handling
 

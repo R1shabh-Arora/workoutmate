@@ -134,8 +134,9 @@ Full walkthrough, including a real Windows-specific build/deploy gotcha and its 
 ## Security
 
 - Server-only secrets never reach a `NEXT_PUBLIC_*` var or a Client Component; the production build fails if that boundary is crossed (Next hard-blocks `next/headers` etc. from client bundles).
-- RLS is the real enforcement boundary for cross-user data isolation — live-tested (not just inspected): an anonymous write against a user-scoped table is rejected with a genuine Postgres RLS policy violation, and an anonymous read of a user-scoped table returns an empty result rather than an error or someone else's row.
+- RLS is the real enforcement boundary for cross-user data isolation — live-tested (not just inspected): an anonymous write against a user-scoped table is rejected with a genuine Postgres RLS policy violation, an anonymous read of a user-scoped table returns an empty result rather than an error or someone else's row, and two real authenticated accounts have been cross-checked against every user-owned table with the same result (see `docs/DATABASE.md`).
 - The AI coach's plan-editing tools cannot write to the plan; only `applyPendingChange()`, triggered solely by the user's own confirmation click, can.
+- `/api/coach` is rate-limited server-side, per authenticated user (Cloudflare Rate Limiting binding — see `docs/AI_COACH.md`), so it can't be hammered for unbounded Anthropic spend by one account.
 - `.claude/settings.json` (committed) asks for confirmation before `git push --force`, `git reset --hard`, or a `DROP TABLE`/`DROP SCHEMA` pattern, and denies the `Read` tool on `.env.local`/`.dev.vars`. This is a backstop, not a substitute for judgment — treat any request to weaken RLS, force-push, or drop production data as something to stop and confirm regardless of what the permission layer allows.
 
 ## Git attribution

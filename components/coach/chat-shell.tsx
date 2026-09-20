@@ -68,7 +68,7 @@ export function ChatShell({
         {error && (
           <div className="mx-9 flex items-center gap-2 rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">
             <ShieldAlert className="size-3.5 shrink-0" />
-            Something went wrong. Please try again.
+            {error.message || "Something went wrong. Please try again."}
           </div>
         )}
       </div>

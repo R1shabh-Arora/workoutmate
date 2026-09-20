@@ -53,7 +53,7 @@ export async function getConversationUIMessages(conversationId: string): Promise
     .eq("profile_id", user.id)
     .order("created_at", { ascending: true });
 
-  return (data ?? [])
+  const messages = (data ?? [])
     .filter((m) => m.role === "user" || m.role === "assistant")
     .map((m) => {
       const parts: UIMessage["parts"] = [];
@@ -65,4 +65,39 @@ export async function getConversationUIMessages(conversationId: string): Promise
       }
       return { id: m.id, role: m.role as "user" | "assistant", parts };
     });
+
+  // A proposal's tool-output only ever recorded "proposed: true" — the state
+  // at the moment it was created. It may since have been applied or
+  // cancelled, so stamp each one's real current status on reload; the
+  // ConfirmationCard reads `currentStatus` instead of always assuming pending.
+  const pendingChangeIds = new Set<string>();
+  for (const message of messages) {
+    for (const part of message.parts) {
+      if (!part.type.startsWith("tool-") || !("output" in part)) continue;
+      const output = part.output as Record<string, unknown> | undefined;
+      if (output?.proposed === true && typeof output.pendingChangeId === "string") {
+        pendingChangeIds.add(output.pendingChangeId);
+      }
+    }
+  }
+
+  if (pendingChangeIds.size > 0) {
+    const { data: changes } = await supabase
+      .from("pending_plan_changes")
+      .select("id, status")
+      .eq("profile_id", user.id)
+      .in("id", Array.from(pendingChangeIds));
+    const statusById = new Map((changes ?? []).map((c) => [c.id, c.status]));
+
+    for (const message of messages) {
+      for (const part of message.parts as Array<{ type: string; output?: unknown }>) {
+        if (!part.type.startsWith("tool-") || !("output" in part)) continue;
+        const output = part.output as Record<string, unknown> | undefined;
+        const currentStatus = typeof output?.pendingChangeId === "string" ? statusById.get(output.pendingChangeId) : undefined;
+        if (currentStatus) part.output = { ...output, currentStatus };
+      }
+    }
+  }
+
+  return messages;
 }
